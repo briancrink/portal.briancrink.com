@@ -807,9 +807,6 @@
       50%      { opacity: 0.95; }
     }
 
-    /* ===== Commerce / BossOS =====
-       Solid orange fills the ENTIRE card.
-       Sphere sits centered on top of it. */
     .world.commerce {
       background: #ea580c;
     }
@@ -1100,8 +1097,6 @@
     let dragging = false;
     let sunAnim = null;
     let transitioning = false;
-
-    // Sphere resize handle (called when BossOS becomes active)
     let economyResize = null;
 
     function setThemeColor(name) {
@@ -1318,7 +1313,6 @@
         else prepareIconsOffCard();
       }
 
-      // Force sphere to re-measure the full card when BossOS is shown
       if (name === 'commerce' && typeof economyResize === 'function') {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => economyResize());
@@ -1441,8 +1435,10 @@
     lifeEnter();
 
     /* ============================================================
-       Spherical economic network – Commerce / BossOS only
-       Solid orange background + sphere centered in full card
+       Spherical economic network – Commerce / BossOS
+       Nodes & lines: always original warm color
+       On select: smooth zoom so network fills the card
+       while keeping spherical curvature & rotation
        ============================================================ */
     (function initEconomySphere() {
       const canvas = document.getElementById('economy');
@@ -1457,6 +1453,11 @@
       const NODE_COUNT = 42;
       const RADIUS = 118;
       const PARTICLE_COUNT = 28;
+
+      // Zoom: normal vs selected
+      const SCALE_NORMAL = 1.15;
+      const SCALE_ZOOMED = 2.65;
+      let currentScale = SCALE_NORMAL;
 
       function resize() {
         const parent = canvas.parentElement;
@@ -1475,7 +1476,6 @@
         init();
       }
 
-      // Expose so activateWorldEffects can call it when BossOS is shown
       economyResize = resize;
 
       function fibonacciSphere(count, radius) {
@@ -1531,9 +1531,7 @@
         };
       }
 
-      function project(point) {
-        const scale = 1.15;
-        // Exact center of the full card
+      function project(point, scale) {
         const cx = width / 2;
         const cy = height / 2;
 
@@ -1553,13 +1551,21 @@
         ctx.clearRect(0, 0, width, height);
         rotation += 0.0018;
 
+        const isChroma = portalShell.classList.contains('chroma');
+        const targetScale = isChroma ? SCALE_ZOOMED : SCALE_NORMAL;
+        // Smooth ease toward target
+        currentScale += (targetScale - currentScale) * 0.045;
+
+        // Connection distance threshold scales with zoom so network stays coherent
+        const connectDist = 95 * (currentScale / SCALE_NORMAL);
+
         const projected = nodes.map(n => {
           const rotated = rotateY(n, rotation);
-          const p = project(rotated);
+          const p = project(rotated, currentScale);
           return { ...p, r: n.r, pulse: n.pulse, speed: n.speed };
         });
 
-        // Connections
+        // Connections — warm orange
         ctx.lineWidth = 1;
         for (let i = 0; i < projected.length; i++) {
           for (let j = i + 1; j < projected.length; j++) {
@@ -1585,23 +1591,15 @@
           }
         }
 
-        // Nodes
+        // Nodes — original warm color, no glow
         projected.forEach((p, i) => {
           nodes[i].pulse += nodes[i].speed;
           const scale = 1 + Math.sin(nodes[i].pulse) * 0.22;
-          const radius = p.r * scale;
+          // Slightly larger nodes when zoomed so they remain visible
+          const radius = p.r * scale * (0.85 + 0.15 * (currentScale / SCALE_ZOOMED));
 
           const depth = (p.z / RADIUS + 1) / 2;
-          const alpha = 0.25 + depth * 0.65;
-
-          const glowRadius = radius * 3.5;
-          const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
-          grad.addColorStop(0, `rgba(253, 186, 116, ${0.3 * alpha})`);
-          grad.addColorStop(1, 'rgba(253, 186, 116, 0)');
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
-          ctx.fill();
+          const alpha = 0.35 + depth * 0.6;
 
           ctx.fillStyle = `rgba(255, 225, 190, ${alpha})`;
           ctx.beginPath();
@@ -1609,7 +1607,7 @@
           ctx.fill();
         });
 
-        // Particles
+        // Particles — warm
         particles.forEach(p => {
           p.t += p.speed;
           if (p.t >= 1) {
@@ -1627,7 +1625,7 @@
           const z3 = a.z + (b.z - a.z) * p.t;
 
           const rotated = rotateY({ x: x3, y: y3, z: z3 }, rotation);
-          const proj = project(rotated);
+          const proj = project(rotated, currentScale);
 
           const depth = (proj.z / RADIUS + 1) / 2;
           const alpha = 0.35 + depth * 0.55;
@@ -1642,8 +1640,6 @@
       }
 
       window.addEventListener('resize', resize);
-
-      // Initial size (may be 0 while hidden; will be corrected when BossOS is shown)
       setTimeout(resize, 50);
       draw();
     })();
