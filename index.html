@@ -205,7 +205,8 @@
       align-items: center;
       justify-content: flex-start;
       padding: 0 16px 28px;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
       background: transparent;
       transition: background 0.55s ease;
       --ground-hot: #7dd3fc;
@@ -234,7 +235,6 @@
       --ground-core: #ffedd5;
     }
 
-    /* ===== Chromatic ground — continuous hue drift, no reset ===== */
     body:has(.portal-shell.chroma) {
       --ground-hot: #ff6b9d;
       --ground-soft: #9b6dff;
@@ -364,7 +364,6 @@
       }
     }
 
-    /* ===== Soft full-width floor under portal ===== */
     .scene-ground {
       position: fixed;
       left: 0;
@@ -808,8 +807,22 @@
       50%      { opacity: 0.95; }
     }
 
+    /* ===== Commerce / BossOS =====
+       Solid orange fills the ENTIRE card.
+       Sphere sits centered on top of it. */
     .world.commerce {
       background: #ea580c;
+    }
+
+    #economy {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      opacity: 0.9;
+      pointer-events: none;
     }
 
     .category {
@@ -1026,11 +1039,12 @@
         <div class="links">
           <a href="https://career.briancrink.com">Career</a>
           <a href="https://jobs.briancrink.com">Jobs</a>
-
         </div>
       </section>
 
       <section class="world commerce" data-portal="commerce" data-index="3">
+        <canvas id="economy" aria-hidden="true"></canvas>
+
         <div class="category">04</div>
         <h2>BossOS</h2>
         <div class="subtitle">Business Operating System</div>
@@ -1086,6 +1100,9 @@
     let dragging = false;
     let sunAnim = null;
     let transitioning = false;
+
+    // Sphere resize handle (called when BossOS becomes active)
+    let economyResize = null;
 
     function setThemeColor(name) {
       const meta = document.getElementById('themeColor');
@@ -1300,6 +1317,13 @@
         if (anyVisible) animateIconsOut();
         else prepareIconsOffCard();
       }
+
+      // Force sphere to re-measure the full card when BossOS is shown
+      if (name === 'commerce' && typeof economyResize === 'function') {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => economyResize());
+        });
+      }
     }
 
     function setPortal(nextIndex, direction = 1) {
@@ -1415,6 +1439,214 @@
     setSun(0, 0);
     setAmbient('life');
     lifeEnter();
+
+    /* ============================================================
+       Spherical economic network – Commerce / BossOS only
+       Solid orange background + sphere centered in full card
+       ============================================================ */
+    (function initEconomySphere() {
+      const canvas = document.getElementById('economy');
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      let width = 0, height = 0;
+      let nodes = [];
+      let particles = [];
+      let rotation = 0;
+
+      const NODE_COUNT = 42;
+      const RADIUS = 118;
+      const PARTICLE_COUNT = 28;
+
+      function resize() {
+        const parent = canvas.parentElement;
+        if (!parent) return;
+
+        const rect = parent.getBoundingClientRect();
+        width = Math.max(1, rect.width);
+        height = Math.max(1, rect.height);
+
+        canvas.width = width * devicePixelRatio;
+        canvas.height = height * devicePixelRatio;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+
+        ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        init();
+      }
+
+      // Expose so activateWorldEffects can call it when BossOS is shown
+      economyResize = resize;
+
+      function fibonacciSphere(count, radius) {
+        const points = [];
+        const phi = Math.PI * (3 - Math.sqrt(5));
+
+        for (let i = 0; i < count; i++) {
+          const y = 1 - (i / (count - 1)) * 2;
+          const radiusAtY = Math.sqrt(1 - y * y);
+          const theta = phi * i;
+
+          const x = Math.cos(theta) * radiusAtY;
+          const z = Math.sin(theta) * radiusAtY;
+
+          points.push({
+            x: x * radius,
+            y: y * radius,
+            z: z * radius,
+            r: 2.2 + Math.random() * 1.8,
+            pulse: Math.random() * Math.PI * 2,
+            speed: 0.012 + Math.random() * 0.01
+          });
+        }
+        return points;
+      }
+
+      function init() {
+        nodes = fibonacciSphere(NODE_COUNT, RADIUS);
+
+        particles = [];
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const from = Math.floor(Math.random() * nodes.length);
+          let to = Math.floor(Math.random() * nodes.length);
+          while (to === from) to = Math.floor(Math.random() * nodes.length);
+
+          particles.push({
+            from,
+            to,
+            t: Math.random(),
+            speed: 0.0018 + Math.random() * 0.0022,
+            size: 1.1 + Math.random() * 1.4
+          });
+        }
+      }
+
+      function rotateY(point, angle) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        return {
+          x: point.x * cos - point.z * sin,
+          y: point.y,
+          z: point.x * sin + point.z * cos
+        };
+      }
+
+      function project(point) {
+        const scale = 1.15;
+        // Exact center of the full card
+        const cx = width / 2;
+        const cy = height / 2;
+
+        return {
+          x: cx + point.x * scale,
+          y: cy + point.y * scale,
+          z: point.z
+        };
+      }
+
+      function draw() {
+        if (width < 1 || height < 1) {
+          requestAnimationFrame(draw);
+          return;
+        }
+
+        ctx.clearRect(0, 0, width, height);
+        rotation += 0.0018;
+
+        const projected = nodes.map(n => {
+          const rotated = rotateY(n, rotation);
+          const p = project(rotated);
+          return { ...p, r: n.r, pulse: n.pulse, speed: n.speed };
+        });
+
+        // Connections
+        ctx.lineWidth = 1;
+        for (let i = 0; i < projected.length; i++) {
+          for (let j = i + 1; j < projected.length; j++) {
+            const a = projected[i];
+            const b = projected[j];
+
+            const dx = nodes[i].x - nodes[j].x;
+            const dy = nodes[i].y - nodes[j].y;
+            const dz = nodes[i].z - nodes[j].z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+            if (dist < 95) {
+              const avgZ = (a.z + b.z) / 2;
+              const alpha = 0.08 + (avgZ / RADIUS) * 0.11;
+              if (alpha <= 0) continue;
+
+              ctx.strokeStyle = `rgba(253, 186, 116, ${alpha})`;
+              ctx.beginPath();
+              ctx.moveTo(a.x, a.y);
+              ctx.lineTo(b.x, b.y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Nodes
+        projected.forEach((p, i) => {
+          nodes[i].pulse += nodes[i].speed;
+          const scale = 1 + Math.sin(nodes[i].pulse) * 0.22;
+          const radius = p.r * scale;
+
+          const depth = (p.z / RADIUS + 1) / 2;
+          const alpha = 0.25 + depth * 0.65;
+
+          const glowRadius = radius * 3.5;
+          const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
+          grad.addColorStop(0, `rgba(253, 186, 116, ${0.3 * alpha})`);
+          grad.addColorStop(1, 'rgba(253, 186, 116, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = `rgba(255, 225, 190, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Particles
+        particles.forEach(p => {
+          p.t += p.speed;
+          if (p.t >= 1) {
+            p.t = 0;
+            p.from = p.to;
+            let next = Math.floor(Math.random() * nodes.length);
+            while (next === p.from) next = Math.floor(Math.random() * nodes.length);
+            p.to = next;
+          }
+
+          const a = nodes[p.from];
+          const b = nodes[p.to];
+          const x3 = a.x + (b.x - a.x) * p.t;
+          const y3 = a.y + (b.y - a.y) * p.t;
+          const z3 = a.z + (b.z - a.z) * p.t;
+
+          const rotated = rotateY({ x: x3, y: y3, z: z3 }, rotation);
+          const proj = project(rotated);
+
+          const depth = (proj.z / RADIUS + 1) / 2;
+          const alpha = 0.35 + depth * 0.55;
+
+          ctx.fillStyle = `rgba(255, 235, 210, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        requestAnimationFrame(draw);
+      }
+
+      window.addEventListener('resize', resize);
+
+      // Initial size (may be 0 while hidden; will be corrected when BossOS is shown)
+      setTimeout(resize, 50);
+      draw();
+    })();
   </script>
 </body>
 </html>
