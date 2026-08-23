@@ -1478,14 +1478,14 @@
       const ctx = canvas.getContext('2d');
       const GRID = 24;
       const MAX_DOTS = 50;
-      const EMERGE_INTERVAL = 30;   // frames between new dots while filling (~1.5s at 60fps)
+      const EMERGE_INTERVAL = 20;   // frames between new dots while filling (~1.5s at 60fps)
       const TURNOVER_INTERVAL = 120; // frames between fade+spawn once at cap
 
       let width = 0, height = 0, cols = 0, rows = 0;
       let dots = [];
       let active = false;
       let frame = 0;
-      let nextSpawnAt = 40;
+      let nextSpawnAt = 20;
       let nextTurnoverAt = 0;
       let raf = 0;
 
@@ -1551,7 +1551,7 @@
         resize();
         dots = [];
         frame = 0;
-        nextSpawnAt = 30;
+        nextSpawnAt = 20;
         nextTurnoverAt = 0;
         if (!raf) loop();
       }
