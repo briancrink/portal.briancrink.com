@@ -1029,11 +1029,11 @@
         <h2>LifeOS</h2>
         <div class="subtitle">Life Operating System</div>
         <div class="links">
-          <a href="https://home.briancrink.com">Home</a>
-          <a href="https://space.briancrink.com">Space</a>
-          <a href="https://social.briancrink.com">Social</a>
-          <a href="https://feed.briancrink.com">Feed</a>
-          <a href="https://contact.briancrink.com">Contact</a>
+          <a href="https://home.briancrink.com" data-subtitle="Personal Home Base">Home</a>
+          <a href="https://space.briancrink.com" data-subtitle="Private Digital Space">Space</a>
+          <a href="https://social.briancrink.com" data-subtitle="Social Profiles">Social</a>
+          <a href="https://feed.briancrink.com" data-subtitle="Newsfeeds">Feed</a>
+          <a href="https://contact.briancrink.com" data-subtitle="Get In Touch">Contact</a>
         </div>
       </section>
 
@@ -1053,12 +1053,12 @@
         <h2>DevOS</h2>
         <div class="subtitle">Development Operating System</div>
         <div class="links">
-          <a href="https://dev.briancrink.com">Dev</a>
-          <a href="https://tech.briancrink.com">Tech</a>
-          <a href="https://api.briancrink.com">API</a>
-          <a href="https://app.briancrink.com">App</a>
-          <a href="https://apps.briancrink.com">Apps</a>
-          <a href="https://os.briancrink.com">OS</a>
+          <a href="https://dev.briancrink.com" data-subtitle="Development Workspace">Dev</a>
+          <a href="https://tech.briancrink.com" data-subtitle="Technology Stack">Tech</a>
+          <a href="https://api.briancrink.com" data-subtitle="APIs and Services">API</a>
+          <a href="https://app.briancrink.com" data-subtitle="Primary Application">App</a>
+          <a href="https://apps.briancrink.com" data-subtitle="Application Suite">Apps</a>
+          <a href="https://os.briancrink.com" data-subtitle="Operating System Layer">OS</a>
         </div>
       </section>
 
@@ -1068,9 +1068,9 @@
         <h2>CareerOS</h2>
         <div class="subtitle">Career Operating System</div>
         <div class="links">
-          <a href="https://career.briancrink.com">Career</a>
-          <a href="https://jobs.briancrink.com">Jobs</a>
-          <a href="https://hire.briancrink.com">Hire</a>
+          <a href="https://career.briancrink.com" data-subtitle="Career Path and Roles">Career</a>
+          <a href="https://jobs.briancrink.com" data-subtitle="Open Roles and Market">Jobs</a>
+          <a href="https://hire.briancrink.com" data-subtitle="Hiring and Recruiting">Hire</a>
         </div>
       </section>
 
@@ -1081,10 +1081,10 @@
         <h2>BossOS</h2>
         <div class="subtitle">Business Operating System</div>
         <div class="links">
-          <a href="https://business.briancrink.com">Business</a>
-          <a href="https://shop.briancrink.com">Shop</a>
-          <a href="https://store.briancrink.com">Store</a>
-          <a href="https://support.briancrink.com">Support</a>
+          <a href="https://business.briancrink.com" data-subtitle="Business Operations">Business</a>
+          <a href="https://shop.briancrink.com" data-subtitle="Product Shop">Shop</a>
+          <a href="https://store.briancrink.com" data-subtitle="Storefront and Catalog">Store</a>
+          <a href="https://support.briancrink.com" data-subtitle="Customer Support">Support</a>
         </div>
       </section>
 
@@ -1182,11 +1182,32 @@
       return [...world.querySelectorAll('.links a')];
     }
 
-    function clearLinkSelection() {
+    const defaultSubtitles = new Map();
+    worlds.forEach((w) => {
+      const el = w.querySelector('.subtitle');
+      if (el) defaultSubtitles.set(w, el.textContent.trim());
+    });
+
+    function setActiveSubtitle(text) {
+      const world = worlds[index];
+      if (!world) return;
+      const el = world.querySelector('.subtitle');
+      if (el) el.textContent = text;
+    }
+
+    function restoreActiveSubtitle() {
+      const world = worlds[index];
+      if (!world) return;
+      const el = world.querySelector('.subtitle');
+      if (el) el.textContent = defaultSubtitles.get(world) || el.textContent;
+    }
+
+    function clearLinkSelection(opts = {}) {
       document.querySelectorAll('.links a.is-selected').forEach((a) => {
         a.classList.remove('is-selected');
       });
       linkIndex = -1;
+      if (opts.restoreSubtitle !== false) restoreActiveSubtitle();
       if (typeof window.__syncJobsPreview === 'function') window.__syncJobsPreview();
     }
 
@@ -1194,12 +1215,24 @@
       const links = getActiveLinks();
       if (!links.length) return;
 
-      clearLinkSelection();
+      clearLinkSelection({ restoreSubtitle: false });
       linkIndex = ((next % links.length) + links.length) % links.length;
-      links[linkIndex].classList.add('is-selected');
+      const link = links[linkIndex];
+      link.classList.add('is-selected');
+      setActiveSubtitle(link.getAttribute('data-subtitle') || link.textContent.trim());
       setChroma(true);
       if (typeof window.__syncJobsPreview === 'function') window.__syncJobsPreview();
     }
+
+    // Hover on a link updates selection + subtitle (same as keyboard)
+    worlds.forEach((world) => {
+      world.querySelectorAll('.links a').forEach((a, i) => {
+        a.addEventListener('mouseenter', () => {
+          if (worlds[index] !== world) return;
+          setLinkSelection(i);
+        });
+      });
+    });
 
     function sunPoint(t, w, h) {
       const x = -30 + t * (w + 60);
