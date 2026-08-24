@@ -575,6 +575,7 @@
               drop-shadow(0 0 8px rgba(249, 115, 22, 0.12));
     }
 
+
     .world {
       position: absolute;
       inset: 0;
@@ -583,30 +584,25 @@
       flex-direction: column;
       opacity: 0;
       pointer-events: none;
-      transform: translateX(18px);
-      transition:
-        opacity 0.45s ease,
-        transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+      transform: none;
+      transition: opacity 0.45s ease;
       overflow: hidden;
       border-radius: 0px;
+      z-index: 1;
     }
 
     .world.active {
       opacity: 1;
       pointer-events: auto;
-      transform: translateX(0);
       z-index: 2;
     }
 
-    .world.exit-left {
-      opacity: 0;
-      transform: translateX(-18px);
-    }
-
+    /* keep classes harmless if JS still toggles them */
+    .world.exit-left,
     .world.exit-right {
       opacity: 0;
-      transform: translateX(18px);
-    }
+      transform: none;
+    } 
 
     .world.life {
       background:
@@ -1437,13 +1433,10 @@
       const name = PORTALS[nextIndex];
 
       prev.classList.remove('active');
-      prev.classList.add(direction > 0 ? 'exit-left' : 'exit-right');
+      prev.classList.add(direction > 0 ? 'exit-left' : 'exit-right'); // optional; opacity 0 either way
 
       next.classList.remove('exit-left', 'exit-right');
-      next.style.transform = direction > 0 ? 'translateX(18px)' : 'translateX(-18px)';
-      void next.offsetWidth;
       next.classList.add('active');
-      next.style.transform = '';
 
       setAmbient(name);
       activateWorldEffects(name);
