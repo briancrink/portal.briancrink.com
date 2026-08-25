@@ -1357,22 +1357,43 @@
       return { dx, dy };
     }
 
-    function setIconTransform(icon, dx, dy, scale, opacity) {
-      icon.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+    // Alternating rest tilts (scattered on the board)
+    const ICON_REST_ROT = [-8, 7, -5, 9, -7, 6, -9, 8, -4, 10, -6, 7, -8, 5];
+
+    buildIcons.forEach((icon, i) => {
+      icon.dataset.restRot = String(ICON_REST_ROT[i % ICON_REST_ROT.length]);
+    });
+
+    function iconRestRot(icon) {
+      return Number(icon.dataset.restRot || 0);
+    }
+
+    // Start opposite the rest tilt so the icon swivels into place
+    function iconTravelRot(icon) {
+      const rest = iconRestRot(icon);
+      // ~28–36° away, opposite sign → clear twist during the move
+      return rest >= 0 ? -(36 + Math.abs(rest)) : (36 + Math.abs(rest));
+    }
+
+    function setIconTransform(icon, dx, dy, scale, opacity, rot) {
+      const r = rot != null ? rot : iconRestRot(icon);
+      // rotate between translate and scale so the twist reads clearly
+      icon.style.transform =
+        `translate(${dx}px, ${dy}px) rotate(${r}deg) scale(${scale})`;
       icon.style.opacity = String(opacity);
     }
 
     function prepareIconsOffCard() {
       buildIcons.forEach((icon) => {
         icon.style.transition = 'none';
-        setIconTransform(icon, 0, 0, 1, 0);
+        setIconTransform(icon, 0, 0, 1, 0, iconTravelRot(icon));
       });
       void buildWorld.offsetWidth;
       buildIcons.forEach((icon) => {
         const { dx, dy } = getExitOffset(icon, buildWorld);
         icon.dataset.exitX = dx;
         icon.dataset.exitY = dy;
-        setIconTransform(icon, dx, dy, 0.85, 0);
+        setIconTransform(icon, dx, dy, 0.85, 0, iconTravelRot(icon));
       });
     }
 
@@ -1382,13 +1403,14 @@
         const x = Number(icon.dataset.exitX || 0);
         const y = Number(icon.dataset.exitY || 0);
         icon.style.transition = 'none';
-        setIconTransform(icon, x, y, 0.85, 0);
+        setIconTransform(icon, x, y, 0.85, 0, iconTravelRot(icon));
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             icon.style.transition =
               `transform ${MOVE_MS}ms cubic-bezier(0.22, 1.2, 0.36, 1) ${delay}ms,` +
               `opacity ${FADE_MS}ms ease ${delay}ms`;
-            setIconTransform(icon, 0, 0, 1, 0.9);
+            // Settle at rest tilt
+            setIconTransform(icon, 0, 0, 1, 0.9, iconRestRot(icon));
           });
         });
       });
@@ -1397,7 +1419,7 @@
     function animateIconsOut() {
       buildIcons.forEach((icon) => {
         icon.style.transition = 'none';
-        setIconTransform(icon, 0, 0, 1, 0.9);
+        setIconTransform(icon, 0, 0, 1, 0.9, iconRestRot(icon));
       });
       void buildWorld.offsetWidth;
       buildIcons.forEach((icon) => {
@@ -1413,7 +1435,9 @@
         icon.style.transition =
           `transform ${MOVE_MS}ms cubic-bezier(0.22, 1.15, 0.36, 1) ${delay}ms,` +
           `opacity ${FADE_MS}ms ease ${fadeDelay}ms`;
-        requestAnimationFrame(() => setIconTransform(icon, x, y, 0.85, 0));
+        requestAnimationFrame(() =>
+          setIconTransform(icon, x, y, 0.85, 0, iconTravelRot(icon))
+        );
       });
     }
 
