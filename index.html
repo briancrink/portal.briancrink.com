@@ -823,10 +823,16 @@
       opacity: 0.75;
     }
 
-    /* Jobs marketplace preview: keep square line grid, hide CSS pulse dots */
-    .world.work.jobs-preview::before {
+    /* Jobs / Hire marketplace preview: hide CSS pulse dots */
+    .world.work.jobs-preview::before,
+    .world.work.hire-preview::before {
       animation: none !important;
       opacity: 0 !important;
+    }
+
+    /* Hire camera draws the grid on canvas so it pans/zooms with the dots */
+    .world.work.hire-preview {
+      background-image: none;
     }
 
     #jobsMarket {
@@ -840,7 +846,8 @@
       transition: opacity 0.4s ease;
     }
 
-    .world.work.jobs-preview #jobsMarket {
+    .world.work.jobs-preview #jobsMarket,
+    .world.work.hire-preview #jobsMarket {
       opacity: 1;
     }
 
@@ -1095,9 +1102,9 @@
         <h2>CareerOS</h2>
         <div class="subtitle">Career Operating System</div>
         <div class="links">
-          <a href="https://career.briancrink.com" data-subtitle="Career Path and Roles">Career</a>
           <a href="https://jobs.briancrink.com" data-subtitle="Open Roles and Market">Jobs</a>
           <a href="https://hire.briancrink.com" data-subtitle="Hiring and Recruiting">Hire</a>
+          <a href="https://career.briancrink.com" data-subtitle="Career Path and Roles">Career</a>
         </div>
       </section>
 
@@ -1235,14 +1242,18 @@
       });
       linkIndex = -1;
       if (opts.restoreSubtitle !== false) restoreActiveSubtitle();
-      if (typeof window.__syncJobsPreview === 'function') window.__syncJobsPreview();
+      // Skip sync while swapping links — an empty selection would wipe Jobs dots
+      // before Hire can pick one. Click-outside still syncs (default).
+      if (opts.syncJobs !== false && typeof window.__syncJobsPreview === 'function') {
+        window.__syncJobsPreview();
+      }
     }
 
     function setLinkSelection(next) {
       const links = getActiveLinks();
       if (!links.length) return;
 
-      clearLinkSelection({ restoreSubtitle: false });
+      clearLinkSelection({ restoreSubtitle: false, syncJobs: false });
       linkIndex = ((next % links.length) + links.length) % links.length;
       const link = links[linkIndex];
       link.classList.add('is-selected');
@@ -1601,10 +1612,12 @@
 
 
     /* ============================================================
-       Jobs marketplace – CareerOS / Jobs button
-       Square line grid visible; CSS pulse dots hidden.
-       Emerging dots grow → pulse at intersections (cell centers).
-       Cap 50: fade one out, spawn a new one, indefinitely.
+       Jobs marketplace + Hire focus – CareerOS
+       Jobs: emerging dots at grid intersections.
+       Hire: pick a pulsing job, pan grid+dots so it sits at the
+       safe intersection (4th row from top, 4th column from right),
+       fade other dots, then zoom in. Camera moves — dots stay
+       locked to intersections.
        ============================================================ */
     (function initJobsMarket() {
       const workWorld = document.querySelector('.world.work');
@@ -1614,16 +1627,30 @@
       const ctx = canvas.getContext('2d');
       const GRID = 24;
       const MAX_DOTS = 50;
-      const EMERGE_INTERVAL = 20;   // frames between new dots while filling (~1.5s at 60fps)
-      const TURNOVER_INTERVAL = 120; // frames between fade+spawn once at cap
+      const EMERGE_INTERVAL = 20;
+      const TURNOVER_INTERVAL = 120;
+      const HIRE_SCALE = 2.2;
+      const HIRE_BEAT = 50;          // pause after slide / emerge before zoom
+      const HIRE_PAN_LEAD = 22;      // beat so the chosen job is visible first
+      const HIRE_PAN_FRAMES = 96;    // ~1.6s ease-in-out slide
+      const HIRE_ZOOM_FRAMES = 84;   // ~1.4s ease-in-out zoom
 
       let width = 0, height = 0, cols = 0, rows = 0;
       let dots = [];
       let active = false;
+      let mode = 'off'; // off | jobs | hire
       let frame = 0;
       let nextSpawnAt = 20;
       let nextTurnoverAt = 0;
       let raf = 0;
+
+      let camX = 0, camY = 0, camScale = 1;
+      let targetCamX = 0, targetCamY = 0, targetScale = 1;
+      let hirePhase = 'idle'; // idle | lead | emerge | pan | rest | zoom | hold
+      let hireWait = 0;
+      let hireTween = 0;
+      let fromCamX = 0, fromCamY = 0, fromScale = 1;
+      let chosen = null;
 
       function resize() {
         const rect = workWorld.getBoundingClientRect();
@@ -1634,9 +1661,16 @@
         canvas.style.width = width + 'px';
         canvas.style.height = height + 'px';
         ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-        // line intersections: 0, 24, 48… (inclusive edges that fit)
         cols = Math.max(1, Math.floor(width / GRID));
         rows = Math.max(1, Math.floor(height / GRID));
+        if (mode === 'hire' && chosen) applyHireCameraTargets();
+      }
+
+      function safeIntersection() {
+        // 4th vertical line from the right, 4th horizontal line from the top
+        const col = Math.max(1, cols - 3);
+        const row = 3;
+        return { col, row };
       }
 
       function occupied() {
@@ -1647,56 +1681,144 @@
 
       function randomFreeCell() {
         const used = occupied();
-        // intersections: col 0..cols, row 0..rows (grid lines)
         for (let tries = 0; tries < 80; tries++) {
           const col = Math.floor(Math.random() * (cols + 1));
           const row = Math.floor(Math.random() * (rows + 1));
           const k = col + ',' + row;
-          if (!used.has(k)) {
-            return {
-              col, row,
-              x: col * GRID,
-              y: row * GRID
-            };
-          }
+          if (!used.has(k)) return { col, row };
         }
         return null;
       }
 
-      function spawnDot() {
-        const cell = randomFreeCell();
-        if (!cell) return false;
-        dots.push({
-          col: cell.col,
-          row: cell.row,
-          x: cell.x,
-          y: cell.y,
-          state: 'emerging', // emerging | pulsing | fading
+      function spawnDot(cell, state) {
+        const at = cell || randomFreeCell();
+        if (!at) return null;
+        const d = {
+          col: at.col,
+          row: at.row,
+          state: state || 'emerging',
           age: 0,
           pulse: Math.random() * Math.PI * 2,
-          scale: 0,
+          scale: state === 'pulsing' ? 1 : 0,
           alpha: 1
-        });
-        return true;
+        };
+        dots.push(d);
+        return d;
+      }
+
+      function worldToScreen(col, row) {
+        return {
+          x: camX + col * GRID * camScale,
+          y: camY + row * GRID * camScale
+        };
+      }
+
+      function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      function applyHireCameraTargets() {
+        if (!chosen) return;
+        const safe = safeIntersection();
+        const safeX = safe.col * GRID;
+        const safeY = safe.row * GRID;
+        const scale = hirePhase === 'pan' ? 1 : (hirePhase === 'idle' ? 1 : HIRE_SCALE);
+        const useScale = (hirePhase === 'zoom' || hirePhase === 'hold') ? HIRE_SCALE : 1;
+        targetScale = useScale;
+        targetCamX = safeX - chosen.col * GRID * targetScale;
+        targetCamY = safeY - chosen.row * GRID * targetScale;
+      }
+
+      function resetCamera() {
+        camX = 0; camY = 0; camScale = 1;
+        targetCamX = 0; targetCamY = 0; targetScale = 1;
+        hirePhase = 'idle';
+        hireWait = 0;
+        hireTween = 0;
+        fromCamX = 0; fromCamY = 0; fromScale = 1;
+        chosen = null;
       }
 
       function startJobsPreview() {
-        if (active) return;
-        active = true;
+        if (mode === 'jobs') return;
         workWorld.classList.add('jobs-preview');
+        workWorld.classList.remove('hire-preview');
         resize();
         dots = [];
         frame = 0;
         nextSpawnAt = 20;
         nextTurnoverAt = 0;
         if (!raf) loop();
+        active = true;
+        mode = 'jobs';
+        resetCamera();
+      }
+
+      function startHirePreview() {
+        if (mode === 'hire') return;
+        workWorld.classList.add('hire-preview');
+        workWorld.classList.remove('jobs-preview');
+        resize();
+        if (!active) {
+          dots = [];
+          frame = 0;
+          if (!raf) loop();
+        }
+        active = true;
+        mode = 'hire';
+
+        const live = dots.filter(d => d.state === 'pulsing' || d.state === 'emerging');
+        const spawned = live.length === 0;
+        if (live.length) {
+          const safe = safeIntersection();
+          const ranked = live
+            .map(d => ({ d, dist: Math.abs(d.col - safe.col) + Math.abs(d.row - safe.row) }))
+            .sort((a, b) => b.dist - a.dist);
+          const far = ranked.filter(x => x.dist >= 3);
+          const pool = far.length ? far : ranked;
+          chosen = pool[Math.floor(Math.random() * Math.min(3, pool.length))].d;
+        } else {
+          const safe = safeIntersection();
+          chosen = spawnDot(safe, 'emerging');
+        }
+        if (!chosen) return;
+
+        if (!spawned && chosen.state === 'emerging') {
+          // keep emerging; do not snap to pulsing
+        } else if (!spawned) {
+          chosen.state = 'pulsing';
+          chosen.alpha = 1;
+        }
+
+        dots.forEach(d => {
+          if (d !== chosen && d.state !== 'fading') {
+            d.state = 'fading';
+            d.age = 0;
+          }
+        });
+
+        camX = 0;
+        camY = 0;
+        camScale = 1;
+        targetScale = 1;
+        hireWait = 0;
+        if (spawned) {
+          hirePhase = 'emerge';
+          applyHireCameraTargets();
+        } else {
+          hirePhase = 'lead';
+          applyHireCameraTargets();
+        }
       }
 
       function stopJobsPreview() {
-        if (!active) return;
+        if (!active && mode === 'off') return;
         active = false;
+        mode = 'off';
         workWorld.classList.remove('jobs-preview');
+        workWorld.classList.remove('hire-preview');
         dots = [];
+        resetCamera();
         ctx.clearRect(0, 0, width, height);
       }
 
@@ -1704,10 +1826,9 @@
         for (const d of dots) {
           d.age++;
           if (d.state === 'emerging') {
-            // grow then settle (~50 frames)
             if (d.age < 28) {
               d.scale = d.age / 28 * 1.55;
-              d.alpha = 1;
+              d.alpha = Math.min(1, d.age / 18);
             } else if (d.age < 48) {
               d.scale = 1.55 - (d.age - 28) / 20 * 0.55;
               d.alpha = 1;
@@ -1721,26 +1842,24 @@
             d.scale = 1 + Math.sin(d.pulse) * 0.28;
             d.alpha = 1;
           } else if (d.state === 'fading') {
-            d.alpha -= 0.028;
+            d.alpha -= (mode === 'hire' ? 0.016 : 0.028);
             d.scale *= 0.98;
           }
         }
         dots = dots.filter(d => !(d.state === 'fading' && d.alpha <= 0.02));
+        if (chosen && !dots.includes(chosen)) chosen = null;
       }
 
       function tickMarket() {
-        if (!active) return;
+        if (!active || mode !== 'jobs') return;
         frame++;
-
         const live = dots.filter(d => d.state !== 'fading').length;
-
         if (live < MAX_DOTS) {
           if (frame >= nextSpawnAt) {
             if (spawnDot()) nextSpawnAt = frame + EMERGE_INTERVAL + Math.floor(Math.random() * 40);
             else nextSpawnAt = frame + 30;
           }
         } else {
-          // at capacity: fade one, then spawn replacement
           if (nextTurnoverAt === 0) nextTurnoverAt = frame + TURNOVER_INTERVAL;
           if (frame >= nextTurnoverAt) {
             const pulsing = dots.filter(d => d.state === 'pulsing');
@@ -1749,29 +1868,112 @@
               victim.state = 'fading';
               victim.age = 0;
             }
-            // spawn after short beat so fade is visible
             nextSpawnAt = frame + 36;
             nextTurnoverAt = frame + TURNOVER_INTERVAL + Math.floor(Math.random() * 50);
           }
           if (frame >= nextSpawnAt && live < MAX_DOTS + 2) {
-            // allow spawn while one is fading so count stays near 30
             const nonFade = dots.filter(d => d.state !== 'fading').length;
             if (nonFade < MAX_DOTS) {
               spawnDot();
-              nextSpawnAt = frame + 9999; // wait for next turnover
+              nextSpawnAt = frame + 9999;
             }
           }
         }
       }
 
-      function drawDots() {
-        ctx.clearRect(0, 0, width, height);
-        for (const d of dots) {
-          const r = Math.max(1.2, 2.15 * d.scale);
-          const a = Math.max(0, Math.min(1, d.alpha));
-          ctx.fillStyle = 'rgba(180, 190, 205,' + (0.55 * a) + ')';
+      function tickHireCamera() {
+        if (mode !== 'hire') return;
+        hireWait++;
+
+        if (hirePhase === 'emerge') {
+          if (chosen && chosen.state === 'pulsing' && hireWait > 8) {
+            hireWait = 0;
+            hirePhase = 'rest';
+          }
+          return;
+        }
+
+        if (hirePhase === 'lead') {
+          if (hireWait >= HIRE_PAN_LEAD) {
+            hireWait = 0;
+            hireTween = 0;
+            fromCamX = camX;
+            fromCamY = camY;
+            fromScale = camScale;
+            hirePhase = 'pan';
+            applyHireCameraTargets();
+          }
+          return;
+        }
+
+        if (hirePhase === 'rest') {
+          if (hireWait >= HIRE_BEAT) {
+            hireWait = 0;
+            hireTween = 0;
+            fromCamX = camX;
+            fromCamY = camY;
+            fromScale = camScale;
+            hirePhase = 'zoom';
+            applyHireCameraTargets();
+          }
+          return;
+        }
+
+        if (hirePhase === 'pan' || hirePhase === 'zoom') {
+          const dur = hirePhase === 'pan' ? HIRE_PAN_FRAMES : HIRE_ZOOM_FRAMES;
+          hireTween = Math.min(1, hireTween + 1 / dur);
+          const k = easeInOutCubic(hireTween);
+          camX = fromCamX + (targetCamX - fromCamX) * k;
+          camY = fromCamY + (targetCamY - fromCamY) * k;
+          camScale = fromScale + (targetScale - fromScale) * k;
+          if (hireTween >= 1) {
+            camX = targetCamX;
+            camY = targetCamY;
+            camScale = targetScale;
+            if (hirePhase === 'pan') {
+              hireWait = 0;
+              hirePhase = 'rest';
+            } else {
+              hirePhase = 'hold';
+            }
+          }
+        }
+      }
+
+      function drawGrid() {
+        ctx.strokeStyle = 'rgba(16, 16, 16, 0.85)';
+        ctx.lineWidth = 1;
+        const minCol = Math.floor((-camX) / (GRID * camScale)) - 1;
+        const maxCol = Math.ceil((width - camX) / (GRID * camScale)) + 1;
+        const minRow = Math.floor((-camY) / (GRID * camScale)) - 1;
+        const maxRow = Math.ceil((height - camY) / (GRID * camScale)) + 1;
+        for (let c = minCol; c <= maxCol; c++) {
+          const x = camX + c * GRID * camScale;
           ctx.beginPath();
-          ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let r = minRow; r <= maxRow; r++) {
+          const y = camY + r * GRID * camScale;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+      }
+
+      function drawDots() {
+        for (const d of dots) {
+          const p = worldToScreen(d.col, d.row);
+          const r = Math.max(1.2, 2.15 * d.scale * (0.9 + 0.1 * camScale));
+          const a = Math.max(0, Math.min(1, d.alpha));
+          const fill = d === chosen && mode === 'hire'
+            ? 'rgba(230, 235, 245,' + (0.85 * a) + ')'
+            : 'rgba(180, 190, 205,' + (0.55 * a) + ')';
+          ctx.fillStyle = fill;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -1779,11 +1981,13 @@
       function loop() {
         raf = requestAnimationFrame(loop);
         if (!active) return;
-        // keep size in sync if card resized
         const rect = workWorld.getBoundingClientRect();
         if (Math.abs(rect.width - width) > 1 || Math.abs(rect.height - height) > 1) resize();
         tickMarket();
+        tickHireCamera();
         updateDots();
+        ctx.clearRect(0, 0, width, height);
+        if (mode === 'hire') drawGrid();
         drawDots();
       }
 
@@ -1797,26 +2001,39 @@
         return false;
       }
 
+      function hireLinkActive() {
+        const links = workWorld.querySelectorAll('.links a');
+        for (const a of links) {
+          if (/^hire$/i.test(a.textContent.trim()) || /hire\.briancrink/i.test(a.href || '')) {
+            if (a.classList.contains('is-selected') || a.matches(':hover')) return true;
+          }
+        }
+        return false;
+      }
+
       function syncJobsPreview() {
-        // Only when CareerOS card is the active world
         const workActive = workWorld.classList.contains('active');
-        if (workActive && jobsLinkActive()) startJobsPreview();
+        if (!workActive) {
+          stopJobsPreview();
+          return;
+        }
+        if (hireLinkActive()) startHirePreview();
+        else if (jobsLinkActive()) startJobsPreview();
         else stopJobsPreview();
       }
 
-      // Hover on Jobs / Career links
       workWorld.querySelectorAll('.links a').forEach((a) => {
         a.addEventListener('mouseenter', () => {
-          if (/jobs/i.test(a.textContent)) startJobsPreview();
+          const label = (a.textContent || '').trim();
+          if (/^hire$/i.test(label) || /hire\.briancrink/i.test(a.href || '')) startHirePreview();
+          else if (/jobs/i.test(label)) startJobsPreview();
           else stopJobsPreview();
         });
         a.addEventListener('mouseleave', () => {
-          // keep if still keyboard-selected
           requestAnimationFrame(syncJobsPreview);
         });
       });
 
-      // Expose for setLinkSelection / setPortal hooks
       window.__syncJobsPreview = syncJobsPreview;
       window.__stopJobsPreview = stopJobsPreview;
 
