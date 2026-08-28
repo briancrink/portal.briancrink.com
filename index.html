@@ -1632,7 +1632,7 @@
       const HIRE_SCALE = 2.2;
       const HIRE_BEAT = 10;          // pause after slide / emerge before zoom
       const HIRE_PAN_LEAD = 22;      // beat so the chosen job is visible first
-      const HIRE_PAN_FRAMES = 150;    // ease-in-out slide
+      const HIRE_PAN_FRAMES = 150;   // ease-in-out slide
       const HIRE_ZOOM_FRAMES = 84;   // ~1.4s ease-in-out zoom
 
       let width = 0, height = 0, cols = 0, rows = 0;
@@ -1773,10 +1773,9 @@
           const safe = safeIntersection();
           const ranked = live
             .map(d => ({ d, dist: Math.abs(d.col - safe.col) + Math.abs(d.row - safe.row) }))
-            .sort((a, b) => b.dist - a.dist);
-          const far = ranked.filter(x => x.dist >= 3);
-          const pool = far.length ? far : ranked;
-          chosen = pool[Math.floor(Math.random() * Math.min(3, pool.length))].d;
+            .sort((a, b) => a.dist - b.dist);
+          const nearestAway = ranked.find(x => x.dist > 0);
+          chosen = (nearestAway || ranked[0]).d;
         } else {
           const safe = safeIntersection();
           chosen = spawnDot(safe, 'emerging');
