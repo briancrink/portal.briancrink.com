@@ -851,6 +851,51 @@
       opacity: 1;
     }
 
+    .hire-beacon {
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      margin: 0;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      z-index: 3;
+      transition: none;
+    }
+    .hire-beacon.is-on {
+      opacity: 1;
+      visibility: visible;
+    }
+    .hire-beacon .hire-dot {
+      width: 15px;
+      height: 15px;
+      background: #27c93f;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #27c93f;
+      position: relative;
+      z-index: 3;
+      display: block;
+    }
+    .hire-beacon .pulse-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 15px;
+      height: 15px;
+      background: #18b02f;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0.45;
+      animation: pulseBeacon 1.35s infinite ease-out;
+      z-index: 2;
+      pointer-events: none;
+    }
+    @keyframes pulseBeacon {
+      0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0.6; }
+      100% { transform: translate(-50%, -50%) scale(2.3); opacity: 0; }
+    }
+
     @keyframes dotPulse {
       0%, 100% { opacity: 0; }
       50%      { opacity: 0.95; }
@@ -951,8 +996,8 @@
     }
 
     .world.work .links a.is-selected {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.28);
+      background: rgba(30, 254, 18, 0.06);
+      border-color: #29eb463b;
     }
 
     body.portal-life .links a.is-selected {
@@ -1098,12 +1143,16 @@
 
       <section class="world work" data-portal="work" data-index="2">
         <canvas id="jobsMarket" aria-hidden="true"></canvas>
+        <div class="hire-beacon" aria-hidden="true">
+          <span class="pulse-ring"></span>
+          <span class="hire-dot"></span>
+        </div>
         <div class="category">03</div>
         <h2>CareerOS</h2>
         <div class="subtitle">Career Operating System</div>
         <div class="links">
           <a href="https://jobs.briancrink.com" data-subtitle="Open Roles and Market">Jobs</a>
-          <a href="https://hire.briancrink.com" data-subtitle="Hiring and Recruiting">Hire</a>
+          <a href="https://hire.briancrink.com" data-subtitle="Available For Hire">Hire</a>
           <a href="https://career.briancrink.com" data-subtitle="Career Path and Roles">Career</a>
         </div>
       </section>
@@ -1630,9 +1679,9 @@
       const EMERGE_INTERVAL = 20;
       const TURNOVER_INTERVAL = 120;
       const HIRE_SCALE = 2.2;
-      const HIRE_BEAT = 10;          // pause after slide / emerge before zoom
+      const HIRE_BEAT = 20;          // pause after slide / emerge before zoom
       const HIRE_PAN_LEAD = 22;      // beat so the chosen job is visible first
-      const HIRE_PAN_FRAMES = 150;   // ease-in-out slide
+      const HIRE_PAN_FRAMES = 170;   // ease-in-out slide
       const HIRE_ZOOM_FRAMES = 84;   // ~1.4s ease-in-out zoom
 
       let width = 0, height = 0, cols = 0, rows = 0;
@@ -1666,11 +1715,49 @@
         if (mode === 'hire' && chosen) applyHireCameraTargets();
       }
 
+      let hireBay = null;
+
+      function hireBayScreen() {
+        if (hireBay) return hireBay;
+        const wr = workWorld.getBoundingClientRect();
+        const sub = workWorld.querySelector('.subtitle');
+        const DOT = 15, GAP = 10;
+        if (!sub) {
+          hireBay = { x: Math.max(24, width * 0.62), y: Math.max(36, height * 0.16) };
+          return hireBay;
+        }
+        let box = sub.getBoundingClientRect();
+        try {
+          const range = document.createRange();
+          range.selectNodeContents(sub);
+          const rects = range.getClientRects();
+          if (rects.length) box = rects[rects.length - 1];
+        } catch (e) {}
+        hireBay = {
+          x: box.right - wr.left + GAP + DOT / 2,
+          y: box.top - wr.top + box.height / 2
+        };
+        return hireBay;
+      }
+
+      function placeHireBeacon(bay) {
+        const el = workWorld.querySelector('.hire-beacon');
+        if (!el || !bay) return;
+        el.style.left = bay.x + 'px';
+        el.style.top = bay.y + 'px';
+      }
+
+      function setHireBeacon(on) {
+        const el = workWorld.querySelector('.hire-beacon');
+        if (el) el.classList.toggle('is-on', !!on);
+      }
+
       function safeIntersection() {
-        // 4th vertical line from the right, 4th horizontal line from the top
-        const col = Math.max(1, cols - 3);
-        const row = 3;
-        return { col, row };
+        const bay = hireBayScreen();
+        return {
+          col: Math.max(0, Math.min(cols, Math.round(bay.x / GRID))),
+          row: Math.max(0, Math.min(rows, Math.round(bay.y / GRID)))
+        };
       }
 
       function occupied() {
@@ -1717,16 +1804,28 @@
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       }
 
+      function beaconCenter() {
+        const el = workWorld.querySelector('.hire-beacon');
+        const wr = workWorld.getBoundingClientRect();
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            return {
+              x: r.left + r.width / 2 - wr.left,
+              y: r.top + r.height / 2 - wr.top
+            };
+          }
+        }
+        return hireBayScreen();
+      }
+
       function applyHireCameraTargets() {
         if (!chosen) return;
-        const safe = safeIntersection();
-        const safeX = safe.col * GRID;
-        const safeY = safe.row * GRID;
-        const scale = hirePhase === 'pan' ? 1 : (hirePhase === 'idle' ? 1 : HIRE_SCALE);
+        const seat = beaconCenter();
         const useScale = (hirePhase === 'zoom' || hirePhase === 'hold') ? HIRE_SCALE : 1;
         targetScale = useScale;
-        targetCamX = safeX - chosen.col * GRID * targetScale;
-        targetCamY = safeY - chosen.row * GRID * targetScale;
+        targetCamX = seat.x - chosen.col * GRID * targetScale;
+        targetCamY = seat.y - chosen.row * GRID * targetScale;
       }
 
       function resetCamera() {
@@ -1737,6 +1836,8 @@
         hireTween = 0;
         fromCamX = 0; fromCamY = 0; fromScale = 1;
         chosen = null;
+        hireBay = null;
+        setHireBeacon(false);
       }
 
       function startJobsPreview() {
@@ -1767,18 +1868,25 @@
         active = true;
         mode = 'hire';
 
+        hireBay = null;
+        const bayPt = hireBayScreen();
+        placeHireBeacon(bayPt);
+        setHireBeacon(false);
+
         const live = dots.filter(d => d.state === 'pulsing' || d.state === 'emerging');
         const spawned = live.length === 0;
+        const safe = safeIntersection();
         if (live.length) {
-          const safe = safeIntersection();
           const ranked = live
             .map(d => ({ d, dist: Math.abs(d.col - safe.col) + Math.abs(d.row - safe.row) }))
             .sort((a, b) => a.dist - b.dist);
           const nearestAway = ranked.find(x => x.dist > 0);
           chosen = (nearestAway || ranked[0]).d;
         } else {
-          const safe = safeIntersection();
-          chosen = spawnDot(safe, 'emerging');
+          chosen = spawnDot({
+            col: Math.max(0, safe.col - 6),
+            row: Math.max(0, Math.min(rows, safe.row + 2))
+          }, 'emerging');
         }
         if (!chosen) return;
 
@@ -1839,7 +1947,8 @@
           } else if (d.state === 'pulsing') {
             d.pulse += 0.022;
             d.scale = 1 + Math.sin(d.pulse) * 0.28;
-            d.alpha = 1;
+            if (d.canvasFade) d.alpha = Math.max(0, d.alpha - 0.018);
+            else d.alpha = 1;
           } else if (d.state === 'fading') {
             d.alpha -= (mode === 'hire' ? 0.016 : 0.028);
             d.scale *= 0.98;
@@ -1880,6 +1989,11 @@
         }
       }
 
+      function beginHireHandoff() {
+        setHireBeacon(true);
+        if (chosen) chosen.canvasFade = true;
+      }
+
       function tickHireCamera() {
         if (mode !== 'hire') return;
         hireWait++;
@@ -1887,7 +2001,7 @@
         if (hirePhase === 'emerge') {
           if (chosen && chosen.state === 'pulsing' && hireWait > 8) {
             hireWait = 0;
-            hirePhase = 'rest';
+            hirePhase = 'lead';
           }
           return;
         }
@@ -1906,6 +2020,7 @@
         }
 
         if (hirePhase === 'rest') {
+          beginHireHandoff();
           if (hireWait >= HIRE_BEAT) {
             hireWait = 0;
             hireTween = 0;
