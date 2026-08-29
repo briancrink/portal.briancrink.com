@@ -951,8 +951,46 @@
     }
 
     .world.work .category,
-    .world.work .subtitle {
+    .world.work .subtitle,
+    .world.work .hire-location {
       color: #8b949e;
+    }
+
+    .hire-lede {
+      position: relative;
+      margin-bottom: 35px;
+    }
+
+    .world.work .hire-lede .subtitle {
+      margin-bottom: 0;
+    }
+
+    .hire-location {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      font-size: 0.95rem;
+      text-align: left;
+      position: absolute;
+      left: 0;
+      top: calc(100% + 4px);
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0;
+      transition: none;
+    }
+
+    .hire-location.is-on {
+      opacity: 1;
+      transition: opacity 1.4s ease;
+    }
+
+    .hire-location .hire-pin {
+      width: 14px;
+      height: 14px;
+      flex: 0 0 14px;
+      display: block;
     }
 
     .links {
@@ -1157,7 +1195,15 @@
         </div>
         <div class="category">03</div>
         <h2>Career<span class="os-mark">OS</span></h2>
-        <div class="subtitle">Career Operating System</div>
+        <div class="hire-lede">
+          <div class="subtitle">Career Operating System</div>
+          <div class="hire-location" id="hireLocation" aria-hidden="true">
+            <svg class="hire-pin" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>
+            </svg>
+            <span>USA · Remote</span>
+          </div>
+        </div>
         <div class="links">
           <a href="https://jobs.briancrink.com" data-subtitle="Open Roles and Market">Jobs</a>
           <a href="https://hire.briancrink.com" data-subtitle="Available For Hire">Hire</a>
@@ -1760,6 +1806,18 @@
         if (el) el.classList.toggle('is-on', !!on);
       }
 
+      function setHireLocation(on) {
+        const el = workWorld.querySelector('.hire-location');
+        if (!el) return;
+        if (on) {
+          el.removeAttribute('aria-hidden');
+          el.classList.add('is-on');
+        } else {
+          el.classList.remove('is-on');
+          el.setAttribute('aria-hidden', 'true');
+        }
+      }
+
       function safeIntersection() {
         const bay = hireBayScreen();
         return {
@@ -1846,6 +1904,7 @@
         chosen = null;
         hireBay = null;
         setHireBeacon(false);
+        setHireLocation(false);
       }
 
       function startJobsPreview() {
@@ -2037,6 +2096,7 @@
             fromScale = camScale;
             hirePhase = 'zoom';
             applyHireCameraTargets();
+            setHireLocation(true);
           }
           return;
         }
@@ -2063,21 +2123,50 @@
       }
 
       function drawGrid() {
-        ctx.strokeStyle = 'rgba(16, 16, 16, 0.85)';
         ctx.lineWidth = 1;
-        const minCol = Math.floor((-camX) / (GRID * camScale)) - 1;
-        const maxCol = Math.ceil((width - camX) / (GRID * camScale)) + 1;
-        const minRow = Math.floor((-camY) / (GRID * camScale)) - 1;
-        const maxRow = Math.ceil((height - camY) / (GRID * camScale)) + 1;
+        const cell = GRID * camScale;
+        const minCol = Math.floor((-camX) / cell) - 1;
+        const maxCol = Math.ceil((width - camX) / cell) + 1;
+        const minRow = Math.floor((-camY) / cell) - 1;
+        const maxRow = Math.ceil((height - camY) / cell) + 1;
+
+        ctx.strokeStyle = 'rgba(16, 16, 16, 0.85)';
         for (let c = minCol; c <= maxCol; c++) {
-          const x = camX + c * GRID * camScale;
+          const x = camX + c * cell;
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, height);
           ctx.stroke();
         }
         for (let r = minRow; r <= maxRow; r++) {
-          const y = camY + r * GRID * camScale;
+          const y = camY + r * cell;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        const zoomT = Math.max(0, Math.min(1, (camScale - 1) / (HIRE_SCALE - 1)));
+        const fineAlpha = 0.85 * zoomT * zoomT;
+        if (fineAlpha <= 0.02) return;
+
+        const half = cell / 2;
+        const minFc = Math.floor((-camX) / half) - 1;
+        const maxFc = Math.ceil((width - camX) / half) + 1;
+        const minFr = Math.floor((-camY) / half) - 1;
+        const maxFr = Math.ceil((height - camY) / half) + 1;
+        ctx.strokeStyle = 'rgba(16, 16, 16,' + fineAlpha + ')';
+        for (let c = minFc; c <= maxFc; c++) {
+          if (c % 2 === 0) continue;
+          const x = camX + c * half;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let r = minFr; r <= maxFr; r++) {
+          if (r % 2 === 0) continue;
+          const y = camY + r * half;
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(width, y);
