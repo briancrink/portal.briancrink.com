@@ -933,14 +933,56 @@
       position: relative;
       z-index: 1;
     }
+    .world.life h2 { color: #b5e8ffbc; }
+    .world.build h2 { color: #b0ffcdd0; }
+    .world.work h2 { color: #0cff04c5; }
+    .world.commerce h2 { color: #ffdbb5c2; }
+
     .os-mark {
       font-weight: 600;
+      color: rgba(254, 254, 254, 0.377);
     }
-    .world.life .os-mark { color: #9fe1ffbc; }
-    .world.build .os-mark { color: #95ffbcd0; }
-    .world.work .os-mark { color: #a7a7a7c5; }
-    .portal-shell.chroma .world.work .os-mark { color: #0cff04c5; }
-    .world.commerce .os-mark { color: #ffcb94c2; }
+
+    .portal-shell.chroma .os-mark {
+      color: #ffffff;
+    }
+
+    @property --pc1 { syntax: '<color>'; inherits: false; initial-value: #ff006e; }
+    @property --pc2 { syntax: '<color>'; inherits: false; initial-value: #8338ec; }
+    @property --pc3 { syntax: '<color>'; inherits: false; initial-value: #3a86ff; }
+    @property --pc4 { syntax: '<color>'; inherits: false; initial-value: #06d6a0; }
+    @property --pc5 { syntax: '<color>'; inherits: false; initial-value: #ffbe0b; }
+
+    @keyframes portalChromaFade {
+      0%   { --pc1: #ff006e; --pc2: #8338ec; --pc3: #3a86ff; --pc4: #06d6a0; --pc5: #ffbe0b; }
+      20%  { --pc1: #ffbe0b; --pc2: #ff006e; --pc3: #8338ec; --pc4: #3a86ff; --pc5: #06d6a0; }
+      40%  { --pc1: #06d6a0; --pc2: #ffbe0b; --pc3: #ff006e; --pc4: #8338ec; --pc5: #3a86ff; }
+      60%  { --pc1: #3a86ff; --pc2: #06d6a0; --pc3: #ffbe0b; --pc4: #ff006e; --pc5: #8338ec; }
+      80%  { --pc1: #8338ec; --pc2: #3a86ff; --pc3: #06d6a0; --pc4: #ffbe0b; --pc5: #ff006e; }
+      100% { --pc1: #ff006e; --pc2: #8338ec; --pc3: #3a86ff; --pc4: #06d6a0; --pc5: #ffbe0b; }
+    }
+
+    body:has(.portal-shell.chroma) .sub-header-link {
+      background-image: linear-gradient(
+        90deg,
+        var(--pc1),
+        var(--pc2),
+        var(--pc3),
+        var(--pc4),
+        var(--pc5)
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      animation: portalChromaFade 8s linear infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body:has(.portal-shell.chroma) .sub-header-link {
+        animation: none;
+      }
+    }
 
     .subtitle {
       font-size: 0.95rem;
