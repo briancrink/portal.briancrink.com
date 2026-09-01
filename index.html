@@ -218,6 +218,9 @@
       --ground-hot: #7dd3fc;
       --ground-soft: #38bdf8;
       --ground-core: #e0f2fe;
+      --ground-wash-opacity: 0.85;
+      --ground-reflect-opacity: 0.75;
+      --ground-line-opacity: 0.55;
     }
 
     @keyframes fadeIn {
@@ -236,21 +239,33 @@
       --ground-hot: #7dd3fc;
       --ground-soft: #38bdf8;
       --ground-core: #e0f2fe;
+      --ground-wash-opacity: 1.0;
+      --ground-reflect-opacity: 1.0;
+      --ground-line-opacity: 0.70;
     }
     body.portal-build {
       --ground-hot: #4ade80;
       --ground-soft: #22c55e;
       --ground-core: #bbf7d0;
+      --ground-wash-opacity: 1.0;
+      --ground-reflect-opacity: 1.0;
+      --ground-line-opacity: 0.70;
     }
     body.portal-work {
       --ground-hot: #5a6677;
       --ground-soft: #303d4f;
       --ground-core: #94a3b8;
+      --ground-wash-opacity: 0.85;
+      --ground-reflect-opacity: 0.8;
+      --ground-line-opacity: 0.55;
     }
     body.portal-commerce {
       --ground-hot: #fb923c;
       --ground-soft: #f97316;
       --ground-core: #ffedd5;
+      --ground-wash-opacity: 1.0;
+      --ground-reflect-opacity: 1.0;
+      --ground-line-opacity: 0.70;
     }
 
     body:has(.portal-shell.chroma) {
@@ -419,7 +434,7 @@
         color-mix(in srgb, var(--ground-soft) 14%, transparent) 45%,
         color-mix(in srgb, var(--ground-soft) 8%, transparent) 100%
       );
-      opacity: 0.85;
+      opacity: var(--ground-wash-opacity);
       transition: background 0.55s ease, opacity 0.55s ease;
     }
 
@@ -437,7 +452,7 @@
         transparent 72%
       );
       filter: blur(28px);
-      opacity: 0.75;
+      opacity: var(--ground-reflect-opacity);
       transition: background 0.55s ease, opacity 0.55s ease;
     }
 
@@ -454,7 +469,7 @@
         transparent 75%
       );
       filter: blur(16px);
-      opacity: 0.55;
+      opacity: var(--ground-line-opacity);
       transition: background 0.55s ease, opacity 0.55s ease;
     }
 
