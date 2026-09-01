@@ -1312,16 +1312,55 @@
     const PORTALS = worlds.map((w) => w.dataset.portal);
 
     // Sync data-index, category labels, and active class to PORTAL_ORDER
+    const HASH_TO_PORTAL = {
+      life: 'life',
+      dev: 'build',
+      career: 'work',
+      business: 'commerce'
+    };
+    const PORTAL_TO_HASH = {
+      life: 'life',
+      build: 'dev',
+      work: 'career',
+      commerce: 'business'
+    };
+
+    function portalIndexFromHash(hash) {
+      const key = String(hash || '').replace(/^#/, '').trim().toLowerCase();
+      const name = HASH_TO_PORTAL[key];
+      if (!name) return -1;
+      return PORTALS.indexOf(name);
+    }
+
+    function hashFromPortal(name) {
+      return PORTAL_TO_HASH[name] || name;
+    }
+
+    function syncPortalHash(name) {
+      const next = '#' + hashFromPortal(name);
+      if (location.hash === next) return;
+      try {
+        history.replaceState(null, '', next);
+      } catch (err) {
+        try { location.hash = next; } catch (e2) { /* preview / opaque origin */ }
+      }
+    }
+
+    const bootIndex = (() => {
+      const fromHash = portalIndexFromHash(location.hash);
+      return fromHash >= 0 ? fromHash : 0;
+    })();
+
     worlds.forEach((w, i) => {
       w.dataset.index = String(i);
       const cat = w.querySelector('.category');
       if (cat) cat.textContent = String(i + 1).padStart(2, '0');
-      w.classList.toggle('active', i === 0);
+      w.classList.toggle('active', i === bootIndex);
       w.classList.remove('exit-left', 'exit-right');
     });
     dots.forEach((d, i) => {
       d.dataset.index = String(i);
-      d.classList.toggle('active', i === 0);
+      d.classList.toggle('active', i === bootIndex);
       d.hidden = i >= worlds.length;
     });
 
@@ -1338,7 +1377,7 @@
     const MOVE_MS = 640;
     const FADE_MS = 200;
 
-    let index = 0;
+    let index = bootIndex;
     let linkIndex = -1;
     let startX = 0;
     let deltaX = 0;
@@ -1660,12 +1699,21 @@
 
       dots.forEach((d, i) => d.classList.toggle('active', i === nextIndex));
       index = nextIndex;
+      syncPortalHash(name);
 
       setTimeout(() => {
         prev.classList.remove('exit-left', 'exit-right');
         transitioning = false;
       }, 480);
     }
+
+    function applyHashPortal() {
+      const nextIndex = portalIndexFromHash(location.hash);
+      if (nextIndex < 0 || nextIndex === index) return;
+      setPortal(nextIndex, nextIndex > index ? 1 : -1);
+    }
+
+    window.addEventListener('hashchange', applyHashPortal);
 
     stage.addEventListener('touchstart', (e) => {
       dragging = true;
@@ -1744,11 +1792,12 @@
 
     prepareIconsOffCard();
     setSun(0, 0);
-    // Boot from PORTAL_ORDER[0] so ambient, dots, and effects match order
+    // Boot from hash (#life #dev #career #business) or PORTAL_ORDER[0]
     {
-      const startName = PORTALS[0] || 'life';
+      const startName = PORTALS[index] || PORTALS[0] || 'life';
       setAmbient(startName);
       activateWorldEffects(startName);
+      syncPortalHash(startName);
       if (startName !== 'work' && typeof window.__stopJobsPreview === 'function') {
         window.__stopJobsPreview();
       } else if (typeof window.__syncJobsPreview === 'function') {
