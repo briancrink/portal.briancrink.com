@@ -188,6 +188,8 @@
 
     html {
       height: 100%;
+      min-height: 100dvh;
+      min-height: -webkit-fill-available;
       background: #000000;
       transition: background 0.55s ease;
     }
@@ -346,6 +348,12 @@
             ellipse 120% 140% at 50% 40%,
             rgba(14, 164, 233, 0.85) 0%,
             rgba(14, 164, 233, 0.3) 50%,
+            transparent 100%
+          ),
+          radial-gradient(
+            ellipse 120% 90% at 50% 100%,
+            rgba(14, 164, 233, 0.85) 0%,
+            rgba(14, 164, 233, 0.3) 50%,
             #020617 100%
           ),
           #020617;
@@ -354,6 +362,12 @@
         background:
           radial-gradient(
             ellipse 120% 140% at 50% 40%,
+            rgba(22, 163, 74, 0.85) 0%,
+            rgba(22, 163, 74, 0.3) 50%,
+            transparent 100%
+          ),
+          radial-gradient(
+            ellipse 120% 90% at 50% 100%,
             rgba(22, 163, 74, 0.85) 0%,
             rgba(22, 163, 74, 0.3) 50%,
             #03140a 100%
@@ -366,6 +380,12 @@
             ellipse 120% 140% at 50% 40%,
             rgba(60, 60, 60, 0.9) 0%,
             rgba(25, 25, 25, 0.5) 50%,
+            transparent 100%
+          ),
+          radial-gradient(
+            ellipse 120% 90% at 50% 100%,
+            rgba(60, 60, 60, 0.9) 0%,
+            rgba(25, 25, 25, 0.5) 50%,
             #000000 100%
           ),
           #000000;
@@ -376,9 +396,20 @@
             ellipse 120% 140% at 50% 40%,
             rgba(255, 89, 0, 0.85) 0%,
             rgba(255, 89, 0, 0.3) 50%,
+            transparent 100%
+          ),
+          radial-gradient(
+            ellipse 120% 90% at 50% 100%,
+            rgba(255, 89, 0, 0.85) 0%,
+            rgba(255, 89, 0, 0.3) 50%,
             #321200 100%
           ),
           #321200;
+      }
+
+      .scene-ground {
+        height: min(16vh, 120px);
+        opacity: 0.35;
       }
     }
 
