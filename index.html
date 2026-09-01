@@ -178,7 +178,9 @@
       }
       .portal-bloom { filter: blur(16px); opacity: 0.65; }
       .portal-bloom-soft { filter: blur(26px); opacity: 0.35; }
-      body {
+      .header,
+      .portal-stage,
+      .nav-dots {
         animation: none;
         opacity: 1;
       }
@@ -213,8 +215,6 @@
       overflow-y: auto;
       background: transparent;
       transition: background 0.55s ease;
-      opacity: 0;
-      animation: fadeIn 1.3s forwards;
       --ground-hot: #7dd3fc;
       --ground-soft: #38bdf8;
       --ground-core: #e0f2fe;
@@ -223,6 +223,13 @@
     @keyframes fadeIn {
       from { opacity: 0; }
       to   { opacity: 1; }
+    }
+
+    .header,
+    .portal-stage,
+    .nav-dots {
+      opacity: 0;
+      animation: fadeIn 1.3s forwards;
     }
 
     body.portal-life {
@@ -1149,6 +1156,17 @@
   </style>
 </head>
 <body class="portal-life">
+  <script>
+    (function () {
+      var map = { life: 'life', dev: 'build', career: 'work', business: 'commerce' };
+      var theme = { life: '#020617', build: '#03140a', work: '#000000', commerce: '#321200' };
+      var key = String(location.hash || '').replace(/^#/, '').trim().toLowerCase();
+      var name = map[key] || 'life';
+      document.body.classList.remove('portal-life', 'portal-build', 'portal-work', 'portal-commerce');
+      document.body.classList.add('portal-' + name);
+      document.documentElement.style.background = theme[name];
+    })();
+  </script>
   <div class="ambient" aria-hidden="true"></div>
 
   <div class="scene-ground" id="sceneGround" aria-hidden="true">
