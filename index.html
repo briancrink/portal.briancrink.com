@@ -1137,7 +1137,7 @@
 
     .nav-dots {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       justify-content: center;
       padding: 8px 0;
       position: relative;
@@ -1145,28 +1145,100 @@
     }
 
     .nav-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.2);
-      transition: background 0.25s ease, transform 0.25s ease;
+      position: relative;
+      width: 22px;
+      height: 22px;
+      background: transparent;
+      cursor: pointer;
+      transition: transform 0.25s ease;
     }
 
     .nav-dot.active {
-      transform: scale(1.15);
+      transform: scale(1.12);
     }
 
-    body.portal-life .nav-dot.active {
+    .nav-dot .nav-hole {
+      position: absolute;
+      left: 50%;
+      top: calc(22px * 21.35 / 24);
+      width: calc(22px * 14.6 / 24);
+      height: calc(22px * 4.5 / 24);
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      pointer-events: none;
+      transition: background 0.25s ease;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    body.portal-life .nav-dot .nav-hole {
+      background: rgba(125, 211, 252, 0.2);
+    }
+    body.portal-build .nav-dot .nav-hole {
+      background: rgba(0, 255, 157, 0.2);
+    }
+    body.portal-work .nav-dot .nav-hole {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    body.portal-commerce .nav-dot .nav-hole {
+      background: rgba(251, 146, 60, 0.2);
+    }
+
+    body.portal-life .nav-dot.active .nav-hole {
       background: #7dd3fc;
     }
-    body.portal-build .nav-dot.active {
+    body.portal-build .nav-dot.active .nav-hole {
       background: #00ff9d;
     }
-    body.portal-work .nav-dot.active {
+    body.portal-work .nav-dot.active .nav-hole {
       background: #ffffff;
     }
-    body.portal-commerce .nav-dot.active {
+    body.portal-commerce .nav-dot.active .nav-hole {
       background: #fb923c;
+    }
+
+    body:has(.portal-shell.chroma) .nav-dot.active .nav-hole {
+      background: conic-gradient(
+        from var(--portal-spin),
+        #ff006e,
+        #8338ec,
+        #3a86ff,
+        #06d6a0,
+        #ffbe0b,
+        #ff006e
+      );
+      animation: portalSpin 7s linear infinite;
+    }
+
+    .nav-dot svg {
+      position: absolute;
+      inset: 0;
+      width: 22px;
+      height: 22px;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .nav-dot .nav-ring {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.28);
+      stroke-width: 0.95;
+    }
+
+    .nav-dot .nav-pin {
+      fill: rgba(255, 255, 255, 0.42);
+      fill-rule: evenodd;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .nav-dot.active .nav-pin {
+      opacity: 1;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body:has(.portal-shell.chroma) .nav-dot.active .nav-hole {
+        animation: none;
+      }
     }
   </style>
 </head>
@@ -1317,10 +1389,34 @@
   </div>
 
   <div class="nav-dots" id="dots">
-    <div class="nav-dot active" data-index="0"></div>
-    <div class="nav-dot" data-index="1"></div>
-    <div class="nav-dot" data-index="2"></div>
-    <div class="nav-dot" data-index="3"></div>
+    <div class="nav-dot active" data-index="0" data-portal="life">
+      <span class="nav-hole"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <ellipse class="nav-ring" cx="12" cy="21.35" rx="7.55" ry="2.45"/>
+        <path class="nav-pin" d="M12 0.5c3.85 0 6.9 3.05 6.9 7.2 0 4.75-4.9 12.05-6.9 14.75C10.1 19.75 5.1 12.45 5.1 7.7 5.1 3.55 8.15 0.5 12 0.5zm0 4.55a2.85 2.85 0 1 0 0 5.7 2.85 2.85 0 0 0 0-5.7z"/>
+      </svg>
+    </div>
+    <div class="nav-dot" data-index="1" data-portal="commerce">
+      <span class="nav-hole"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <ellipse class="nav-ring" cx="12" cy="21.35" rx="7.55" ry="2.45"/>
+        <path class="nav-pin" d="M12 0.5c3.85 0 6.9 3.05 6.9 7.2 0 4.75-4.9 12.05-6.9 14.75C10.1 19.75 5.1 12.45 5.1 7.7 5.1 3.55 8.15 0.5 12 0.5zm0 4.55a2.85 2.85 0 1 0 0 5.7 2.85 2.85 0 0 0 0-5.7z"/>
+      </svg>
+    </div>
+    <div class="nav-dot" data-index="2" data-portal="build">
+      <span class="nav-hole"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <ellipse class="nav-ring" cx="12" cy="21.35" rx="7.55" ry="2.45"/>
+        <path class="nav-pin" d="M12 0.5c3.85 0 6.9 3.05 6.9 7.2 0 4.75-4.9 12.05-6.9 14.75C10.1 19.75 5.1 12.45 5.1 7.7 5.1 3.55 8.15 0.5 12 0.5zm0 4.55a2.85 2.85 0 1 0 0 5.7 2.85 2.85 0 0 0 0-5.7z"/>
+      </svg>
+    </div>
+    <div class="nav-dot" data-index="3" data-portal="work">
+      <span class="nav-hole"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <ellipse class="nav-ring" cx="12" cy="21.35" rx="7.55" ry="2.45"/>
+        <path class="nav-pin" d="M12 0.5c3.85 0 6.9 3.05 6.9 7.2 0 4.75-4.9 12.05-6.9 14.75C10.1 19.75 5.1 12.45 5.1 7.7 5.1 3.55 8.15 0.5 12 0.5zm0 4.55a2.85 2.85 0 1 0 0 5.7 2.85 2.85 0 0 0 0-5.7z"/>
+      </svg>
+    </div>
   </div>
 
   <script>
@@ -1404,6 +1500,7 @@
     });
     dots.forEach((d, i) => {
       d.dataset.index = String(i);
+      if (PORTALS[i]) d.dataset.portal = PORTALS[i];
       d.classList.toggle('active', i === bootIndex);
       d.hidden = i >= worlds.length;
     });
