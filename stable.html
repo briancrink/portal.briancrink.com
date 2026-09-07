@@ -1159,8 +1159,10 @@
     }
 
     .world.work .links a.is-selected {
-      background: rgba(30, 254, 18, 0.06);
-      border-color: #29eb463b;
+      /* background: rgba(30, 254, 18, 0.06);
+      border-color: #29eb463b; */
+      background: rgba(138, 90, 251, 0.145);
+      border-color: #8353f46e;
     }
 
     body.portal-life .links a.is-selected {
@@ -1307,29 +1309,6 @@
       width: 28px;
       height: 28px;
       display: block;
-    }
-
-    .toggle-btn {
-      pointer-events: auto;
-    }
-
-    @media (max-width: 768px) {
-      .toggle-btn {
-        top: calc(10px + env(safe-area-inset-top, 0px));
-        right: calc(10px + env(safe-area-inset-right, 0px));
-        z-index: 1000;
-        width: 48px;
-        height: 48px;
-        padding: 8px;
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-      }
-
-      .toggle-btn::after {
-        content: "";
-        position: absolute;
-        inset: -12px;
-      }
     }
 
     html:has(body.portal-dark) {
