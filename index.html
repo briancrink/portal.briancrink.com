@@ -14,9 +14,13 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --app-h: 100dvh;
+    }
+
     html, body {
-      height: 100%;
-      height: 100dvh;
+      height: var(--app-h, 100dvh);
+      max-height: var(--app-h, 100dvh);
       overflow: hidden;
       overscroll-behavior: none;
     }
@@ -255,8 +259,8 @@
     }
 
     html {
-      height: 100%;
-      height: 100dvh;
+      height: var(--app-h, 100dvh);
+      max-height: var(--app-h, 100dvh);
       background: #020617;
       transition: background 0.55s ease;
     }
@@ -273,8 +277,8 @@
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      height: 100%;
-      height: 100dvh;
+      height: var(--app-h, 100dvh);
+      max-height: var(--app-h, 100dvh);
       padding: 0 16px 28px;
       overflow: hidden;
       overscroll-behavior: none;
@@ -415,12 +419,10 @@
       top: 0;
       left: 0;
       right: 0;
-      bottom: 0;
+      bottom: auto;
       width: 100%;
-      height: auto;
-      min-height: 100%;
-      min-height: 100dvh;
-      min-height: -webkit-fill-available;
+      height: calc(var(--app-h, 100dvh) + env(safe-area-inset-bottom, 0px) + 72px);
+      min-height: calc(var(--app-h, 100dvh) + env(safe-area-inset-bottom, 0px) + 72px);
       z-index: 0;
       pointer-events: none;
       transition: background 0.55s ease;
@@ -448,23 +450,26 @@
     }
 
     @media (max-width: 768px) {
+      html {
+        transition: none;
+      }
+
       .ambient,
       .theme-veil {
         top: 0;
         left: 0;
         right: 0;
-        bottom: calc(-1 * (env(safe-area-inset-bottom, 0px) + 64px));
-        height: auto;
-        min-height: calc(100dvh + env(safe-area-inset-bottom, 0px) + 64px);
-        min-height: -webkit-fill-available;
+        bottom: auto;
+        height: calc(var(--app-h, 100dvh) + env(safe-area-inset-bottom, 0px) + 96px);
+        min-height: calc(var(--app-h, 100dvh) + env(safe-area-inset-bottom, 0px) + 96px);
       }
 
       body.portal-life .ambient {
         background:
           radial-gradient(
-            ellipse 120% 140% at 50% 40%,
+            ellipse 140% 170% at 50% 48%,
             rgba(14, 164, 233, 0.85) 0%,
-            rgba(14, 164, 233, 0.3) 50%,
+            rgba(14, 164, 233, 0.38) 62%,
             #020617 100%
           ),
           #020617;
@@ -472,9 +477,9 @@
       body.portal-build .ambient {
         background:
           radial-gradient(
-            ellipse 120% 140% at 50% 40%,
+            ellipse 140% 170% at 50% 48%,
             rgba(22, 163, 74, 0.85) 0%,
-            rgba(22, 163, 74, 0.3) 50%,
+            rgba(22, 163, 74, 0.38) 62%,
             #03140a 100%
           ),
           #03140a;
@@ -482,9 +487,9 @@
       body.portal-work .ambient {
         background:
           radial-gradient(
-            ellipse 120% 140% at 50% 40%,
+            ellipse 140% 170% at 50% 48%,
             rgba(120, 32, 244, 0.811) 0%,
-            rgba(76, 22, 153, 0.293) 50%,
+            rgba(76, 22, 153, 0.35) 62%,
             rgb(6, 2, 13) 100%
           ),
           rgb(6, 2, 13);
@@ -492,9 +497,9 @@
       body.portal-commerce .ambient {
         background:
           radial-gradient(
-            ellipse 120% 140% at 50% 40%,
+            ellipse 140% 170% at 50% 48%,
             rgba(255, 89, 0, 0.85) 0%,
-            rgba(255, 89, 0, 0.3) 50%,
+            rgba(255, 89, 0, 0.42) 62%,
             #321200 100%
           ),
           #321200;
@@ -1928,11 +1933,9 @@
       top: 0;
       left: 0;
       right: 0;
-      bottom: 0;
-      height: auto;
-      min-height: 100%;
-      min-height: 100dvh;
-      min-height: -webkit-fill-available;
+      bottom: auto;
+      height: calc(var(--app-h, 100dvh) + env(safe-area-inset-bottom, 0px) + 72px);
+      min-height: calc(var(--app-h, 100dvh) + env(safe-area-inset-bottom, 0px) + 72px);
       z-index: 0;
       pointer-events: none;
       background: #000000;
@@ -1956,6 +1959,21 @@
       document.body.classList.remove('portal-life', 'portal-build', 'portal-work', 'portal-commerce');
       document.body.classList.add('portal-' + name);
       document.documentElement.style.background = theme[name];
+      var meta = document.getElementById('themeColor');
+      if (meta) meta.setAttribute('content', theme[name]);
+      function setAppH() {
+        var vv = window.visualViewport;
+        var h = vv ? Math.round(vv.height + vv.offsetTop) : window.innerHeight;
+        document.documentElement.style.setProperty('--app-h', h + 'px');
+      }
+      setAppH();
+      window.addEventListener('resize', setAppH);
+      window.addEventListener('orientationchange', setAppH);
+      window.addEventListener('pageshow', setAppH);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setAppH);
+        window.visualViewport.addEventListener('scroll', setAppH);
+      }
     })();
   </script>
   <div class="ambient" aria-hidden="true"></div>
