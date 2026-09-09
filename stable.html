@@ -615,47 +615,6 @@
               drop-shadow(0 0 8px rgba(249, 115, 22, 0.12));
     }
 
-    /* ============================================================
-       Portal intro — one-time swirling energy-vortex aperture
-       played on initial load (rendered on canvas, see
-       initPortalIntro()). Starts covering the whole rectangular
-       window, then opens outward from the center until it clears
-       the inner border, revealing the active world underneath.
-       ============================================================ */
-    @keyframes portalIntroFadeOut {
-      0%, 87% { opacity: 1; }
-      100%    { opacity: 0; }
-    }
-
-    .portal-intro {
-      position: absolute;
-      inset: 0;
-      z-index: 6;
-      pointer-events: none;
-      overflow: hidden;
-      animation: portalIntroFadeOut 2.65s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-
-    .portal-intro-canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    /* The glow layer is blurred and additively blended at the GPU
-       compositor level (cheap) instead of using per-stroke canvas
-       shadowBlur (expensive) — same look, far less CPU work. */
-    .portal-intro-canvas-glow {
-      filter: blur(6px);
-      mix-blend-mode: screen;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .portal-intro { display: none; }
-    }
-
 
     .world {
       position: absolute;
@@ -1831,7 +1790,7 @@
   </div>
 
   <div class="portal-stage" id="stage">
-    <div class="portal-shell life-active chroma" id="portalShell">
+    <div class="portal-shell life-active" id="portalShell">
       <div class="portal-bloom-soft" aria-hidden="true"></div>
       <div class="portal-bloom" aria-hidden="true"></div>
       <div class="portal-rim" aria-hidden="true"></div>
@@ -2028,11 +1987,6 @@
         </div>
       </section>
 
-      <div class="portal-intro" id="portalIntro" aria-hidden="true">
-        <canvas class="portal-intro-canvas portal-intro-canvas-crisp" id="portalIntroCrisp"></canvas>
-        <canvas class="portal-intro-canvas portal-intro-canvas-glow" id="portalIntroGlow"></canvas>
-      </div>
-
       </div>
     </div>
   </div>
@@ -2088,248 +2042,13 @@
     const blades = [...document.querySelectorAll('.blade')];
     const buildIcons = [...document.querySelectorAll('.build-icon')];
 
-    // Total real-world time the swirling portal intro stays visible
-    // (matches .portal-intro's CSS fade-out duration below). The
-    // first-load guide overlay waits for this to finish, plus its
-    // own buffer, before it appears — see initPortalGuide().
-    const PORTAL_INTRO_VISIBLE_MS = 2650;
-
-    (function initPortalIntro() {
-      const introEl = document.getElementById('portalIntro');
-      const crispCanvas = document.getElementById('portalIntroCrisp');
-      const glowCanvas = document.getElementById('portalIntroGlow');
-      if (!introEl || !crispCanvas || !glowCanvas) return;
-
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      let finished = false;
-      let rafId = null;
-      function cleanup() {
-        if (finished) return;
-        finished = true;
-        if (rafId) cancelAnimationFrame(rafId);
-        window.removeEventListener('resize', resize);
-        portalShell.classList.remove('chroma');
-        introEl.remove();
-      }
-
-      if (reduceMotion) {
-        cleanup();
-        return;
-      }
-
-      const crispCtx = crispCanvas.getContext('2d');
-      const glowCtx = glowCanvas.getContext('2d');
-      // The glow layer is blurred via CSS afterward, so it doesn't need
-      // retina-sharp detail — rendering it at a lower pixel density (and
-      // letting the compositor scale it up) cuts its fill cost sharply.
-      const dprCrisp = Math.min(window.devicePixelRatio || 1, 1.5);
-      const dprGlow = Math.min(window.devicePixelRatio || 1, 1);
-      let width = 0, height = 0, fillR = 0, coreBase = 0, cornerR = 0;
-      let bgGradient = null, coreGradient = null;
-
-      function resize() {
-        const rect = introEl.getBoundingClientRect();
-        width = Math.max(1, rect.width);
-        height = Math.max(1, rect.height);
-
-        crispCanvas.width = Math.round(width * dprCrisp);
-        crispCanvas.height = Math.round(height * dprCrisp);
-        crispCanvas.style.width = width + 'px';
-        crispCanvas.style.height = height + 'px';
-        crispCtx.setTransform(dprCrisp, 0, 0, dprCrisp, 0, 0);
-        crispCtx.lineCap = 'round';
-        crispCtx.lineJoin = 'round';
-
-        glowCanvas.width = Math.round(width * dprGlow);
-        glowCanvas.height = Math.round(height * dprGlow);
-        glowCanvas.style.width = width + 'px';
-        glowCanvas.style.height = height + 'px';
-        glowCtx.setTransform(dprGlow, 0, 0, dprGlow, 0, 0);
-        glowCtx.lineCap = 'round';
-        glowCtx.lineJoin = 'round';
-
-        // fillR reaches past the farthest corner so strands cover the
-        // whole rectangle, not just an inscribed circle. coreBase stays
-        // tied to the shorter side so the center glow looks proportionate.
-        cornerR = Math.hypot(width, height) * 0.5 * 1.1;
-        fillR = cornerR;
-        coreBase = Math.min(width, height) * 0.5;
-
-        const cx = width / 2, cy = height / 2;
-        bgGradient = crispCtx.createRadialGradient(cx, cy, 0, cx, cy, fillR);
-        bgGradient.addColorStop(0, '#141a35');
-        bgGradient.addColorStop(0.55, '#0a0f24');
-        bgGradient.addColorStop(1, '#04060f');
-
-        coreGradient = crispCtx.createRadialGradient(0, 0, 0, 0, 0, coreBase * 0.42);
-        coreGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-        coreGradient.addColorStop(0.35, 'rgba(205, 222, 255, 0.55)');
-        coreGradient.addColorStop(1, 'rgba(205, 222, 255, 0)');
-
-        buildStrandPaths();
-      }
-
-      // Spiral strands: each sweeps from beyond the rectangle's edge
-      // inward toward the core at a slightly different pace/color, so
-      // the set reads as one coherent vortex filling the whole window
-      // rather than a color wheel. Evenly spaced base angles (with a
-      // little jitter) keep gaps between strands from opening up.
-      const PALETTE = ['#4cc9f0', '#4361ee', '#3a86ff', '#7209b7', '#8338ec', '#b5179e'];
-      const STRAND_COUNT = 104;
-      const STEPS = 20;
-      const strands = Array.from({ length: STRAND_COUNT }, (_, i) => {
-        const step = (Math.PI * 2) / STRAND_COUNT;
-        return {
-          angle0: i * step + (Math.random() - 0.5) * step * 0.85,
-          twist: (Math.random() * 0.9 + 1.35) * Math.PI,
-          innerFrac: Math.random() * 0.16 + 0.06,
-          outerFrac: Math.random() * 0.12 + 0.88,
-          width: Math.random() * 1.8 + 1.2,
-          color: PALETTE[(Math.random() * PALETTE.length) | 0],
-          alpha: Math.random() * 0.3 + 0.55,
-          path: null
-        };
-      });
-
-      // Each strand's curve only depends on the box size (via fillR /
-      // coreBase), not on time, so its geometry is built once (and
-      // rebuilt on resize) into a Path2D instead of being recomputed
-      // point-by-point every animation frame. The shared rotation +
-      // wobble applied at draw time reproduces the exact same motion
-      // as before via a single canvas transform, which the GPU handles
-      // for free instead of hundreds of per-point trig calls per frame.
-      function buildStrandPaths() {
-        strands.forEach((s) => {
-          const outerR = s.outerFrac * fillR;
-          const innerR = s.innerFrac * coreBase;
-          const path = new Path2D();
-          for (let i = 0; i <= STEPS; i++) {
-            const t = i / STEPS;
-            const e = Math.pow(t, 0.85);
-            const r = outerR + (innerR - outerR) * e;
-            const ang = s.angle0 + t * s.twist;
-            const x = Math.cos(ang) * r;
-            const y = Math.sin(ang) * r;
-            if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
-          }
-          s.path = path;
-        });
-      }
-
-      const HOLD_MS = 950;
-      const OPEN_MS = 1350;
-      const TOTAL_MS = HOLD_MS + OPEN_MS;
-      const ROTATION_MS = 8000;
-
-      function easeInOutCubic(t) {
-        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      }
-
-      function punchReveal(ctx, cx, cy, revealR) {
-        if (revealR <= 0) return;
-        const hole = ctx.createRadialGradient(
-          cx, cy, Math.max(0, revealR - 26),
-          cx, cy, revealR
-        );
-        hole.addColorStop(0, 'rgba(0, 0, 0, 1)');
-        hole.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.fillStyle = hole;
-        ctx.beginPath();
-        ctx.arc(cx, cy, revealR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalCompositeOperation = 'source-over';
-      }
-
-      const startTime = performance.now();
-
-      function draw(now) {
-        const elapsed = now - startTime;
-        const cx = width / 2, cy = height / 2;
-
-        let revealT = 0;
-        if (elapsed > HOLD_MS) {
-          revealT = easeInOutCubic(Math.min(1, (elapsed - HOLD_MS) / OPEN_MS));
-        }
-        const revealR = revealT * cornerR;
-
-        // A single shared rotation (with a gentle overall breathing
-        // wobble) stands in for the old per-strand wobble — one canvas
-        // transform instead of a per-strand sine call every frame.
-        const rotation = (elapsed / ROTATION_MS) * Math.PI * 2 + Math.sin(elapsed * 0.0006) * 0.015;
-
-        // ---- crisp base layer: backdrop, bright thin lines, core ----
-        crispCtx.clearRect(0, 0, width, height);
-        crispCtx.fillStyle = bgGradient;
-        crispCtx.fillRect(0, 0, width, height);
-
-        crispCtx.save();
-        crispCtx.translate(cx, cy);
-        crispCtx.rotate(rotation);
-        crispCtx.globalCompositeOperation = 'lighter';
-        strands.forEach((s) => {
-          crispCtx.strokeStyle = s.color;
-          crispCtx.globalAlpha = s.alpha;
-          crispCtx.lineWidth = s.width;
-          crispCtx.stroke(s.path);
-        });
-        crispCtx.restore();
-
-        crispCtx.globalAlpha = 1;
-        crispCtx.globalCompositeOperation = 'source-over';
-        crispCtx.fillStyle = coreGradient;
-        crispCtx.beginPath();
-        crispCtx.arc(cx, cy, coreBase * 0.42, 0, Math.PI * 2);
-        crispCtx.fill();
-
-        punchReveal(crispCtx, cx, cy, revealR);
-
-        // ---- glow layer: soft wide strokes, blurred via CSS ----
-        glowCtx.clearRect(0, 0, width, height);
-        glowCtx.save();
-        glowCtx.translate(cx, cy);
-        glowCtx.rotate(rotation);
-        glowCtx.globalCompositeOperation = 'lighter';
-        strands.forEach((s) => {
-          glowCtx.strokeStyle = s.color;
-          glowCtx.globalAlpha = s.alpha * 0.4;
-          glowCtx.lineWidth = s.width * 3;
-          glowCtx.stroke(s.path);
-        });
-        glowCtx.restore();
-        glowCtx.globalAlpha = 1;
-        glowCtx.globalCompositeOperation = 'source-over';
-
-        punchReveal(glowCtx, cx, cy, revealR);
-
-        if (elapsed < TOTAL_MS + 60) {
-          rafId = requestAnimationFrame(draw);
-        }
-      }
-
-      resize();
-      window.addEventListener('resize', resize);
-      rafId = requestAnimationFrame(draw);
-
-      introEl.addEventListener('animationend', (e) => {
-        if (e.target === introEl) cleanup();
-      });
-
-      // Safety net in case the animationend event is missed.
-      setTimeout(cleanup, TOTAL_MS + 1300);
-    })();
-
     (function initPortalGuide() {
       const guide = document.getElementById('portalGuide');
       const hint = document.getElementById('guideHint');
       if (!guide) return;
 
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      // Wait for the portal intro swirl to fully fade out, then add a
-      // 1.5s buffer before the guide appears. Reduced-motion users never
-      // see the swirl, so they keep the original short load delay.
-      const loadDelayMs = reduce ? 2000 : PORTAL_INTRO_VISIBLE_MS + 1500;
+      const loadDelayMs = 2000;
       const fadeInMs = reduce ? 200 : 850;
       const playMs = reduce ? 800 : 4200;
       const holdMs = 2000;
