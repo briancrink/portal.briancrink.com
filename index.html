@@ -1470,12 +1470,7 @@
       line-height: 0;
     }
 
-    .toggle-btn:hover {
-      transform: rotate(20deg);
-      opacity: 0.62;
-    }
-
-    .toggle-btn:active {
+    .toggle-btn.is-pressed {
       opacity: 0.42;
     }
 
@@ -1730,12 +1725,18 @@
       overflow: visible;
     }
 
-    .guide-hint:hover {
-      opacity: 0.62;
+    .guide-hint.is-pressed {
+      opacity: 0.42;
     }
 
-    .guide-hint:active {
-      opacity: 0.42;
+    @media (hover: hover) and (pointer: fine) {
+      .toggle-btn:hover {
+        transform: rotate(20deg);
+        opacity: 0.62;
+      }
+      .guide-hint:hover {
+        opacity: 0.62;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -3860,6 +3861,24 @@
       });
 
       applyToggle();
+    })();
+
+    (function initChromePress() {
+      const PRESS_MS = 160;
+      document.querySelectorAll('.guide-hint, .toggle-btn').forEach((btn) => {
+        let timer = 0;
+        const release = () => {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => btn.classList.remove('is-pressed'), PRESS_MS);
+        };
+        btn.addEventListener('pointerdown', () => {
+          btn.classList.add('is-pressed');
+          window.clearTimeout(timer);
+        });
+        btn.addEventListener('pointerup', release);
+        btn.addEventListener('pointercancel', release);
+        btn.addEventListener('pointerleave', release);
+      });
     })();
   </script>
 </body>
