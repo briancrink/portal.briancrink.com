@@ -16,9 +16,7 @@
 
     html, body {
       height: 100%;
-      min-height: 100%;
-      min-height: 100dvh;
-      min-height: 100svh;
+      height: 100dvh;
       overflow: hidden;
       overscroll-behavior: none;
     }
@@ -258,15 +256,14 @@
 
     html {
       height: 100%;
-      min-height: 100dvh;
-      min-height: 100svh;
+      height: 100dvh;
       background: #020617;
       transition: background 0.55s ease;
     }
 
     html:has(body.portal-life)     { background: #020617; }
     html:has(body.portal-build)    { background: #03140a; }
-    html:has(body.portal-work)     { background: #000000; }
+    html:has(body.portal-work)     { background: #070016; }
     html:has(body.portal-commerce) { background: #321200; }
 
     body {
@@ -277,14 +274,13 @@
       align-items: center;
       justify-content: flex-start;
       height: 100%;
-      min-height: 100dvh;
-      min-height: 100svh;
+      height: 100dvh;
       padding: 0 16px 28px;
-      padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
       overflow: hidden;
       overscroll-behavior: none;
-      background: transparent;
+      background: var(--page-base, #020617);
       transition: background 0.55s ease;
+      --page-base: #020617;
       --ground-hot: #7dd3fc;
       --ground-soft: #38bdf8;
       --ground-core: #e0f2fe;
@@ -306,6 +302,7 @@
     }
 
     body.portal-life {
+      --page-base: #020617;
       --ground-hot: #7dd3fc;
       --ground-soft: #38bdf8;
       --ground-core: #e0f2fe;
@@ -314,6 +311,7 @@
       --ground-line-opacity: 0.70;
     }
     body.portal-build {
+      --page-base: #03140a;
       --ground-hot: #4ade80;
       --ground-soft: #22c55e;
       --ground-core: #bbf7d0;
@@ -322,6 +320,7 @@
       --ground-line-opacity: 0.70;
     }
     body.portal-work {
+      --page-base: #070016;
       --ground-hot: #5a6677;
       --ground-soft: #303d4f;
       --ground-core: #94a3b8;
@@ -330,6 +329,7 @@
       --ground-line-opacity: 0.55;
     }
     body.portal-commerce {
+      --page-base: #321200;
       --ground-hot: #fb923c;
       --ground-soft: #f97316;
       --ground-core: #ffedd5;
@@ -417,11 +417,9 @@
       right: 0;
       bottom: 0;
       width: 100%;
-      height: 100%;
-      height: 100lvh;
+      height: auto;
       min-height: 100%;
       min-height: 100dvh;
-      min-height: 100svh;
       min-height: -webkit-fill-available;
       z-index: 0;
       pointer-events: none;
@@ -450,6 +448,17 @@
     }
 
     @media (max-width: 768px) {
+      .ambient,
+      .theme-veil {
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: calc(-1 * (env(safe-area-inset-bottom, 0px) + 64px));
+        height: auto;
+        min-height: calc(100dvh + env(safe-area-inset-bottom, 0px) + 64px);
+        min-height: -webkit-fill-available;
+      }
+
       body.portal-life .ambient {
         background:
           radial-gradient(
@@ -497,7 +506,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      height: calc(min(28vh, 240px) + env(safe-area-inset-bottom, 0px));
+      height: min(28vh, 240px);
       z-index: 0;
       pointer-events: none;
       overflow: hidden;
@@ -1908,7 +1917,9 @@
       }
     }
 
-    html:has(body.portal-dark) {
+    html:has(body.portal-dark),
+    body.portal-dark {
+      --page-base: #000000;
       background: #000000;
     }
 
@@ -1918,10 +1929,9 @@
       left: 0;
       right: 0;
       bottom: 0;
-      height: 100%;
-      height: 100lvh;
+      height: auto;
+      min-height: 100%;
       min-height: 100dvh;
-      min-height: 100svh;
       min-height: -webkit-fill-available;
       z-index: 0;
       pointer-events: none;
