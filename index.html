@@ -473,6 +473,54 @@
         height: min(36vh, 300px);
       }
 
+      body.portal-life,
+      body.portal-build,
+      body.portal-work,
+      body.portal-commerce {
+        --ground-wash-opacity: 1;
+        --ground-reflect-opacity: 1;
+        --ground-line-opacity: 1;
+      }
+
+      .scene-ground-plane {
+        background: linear-gradient(
+          to bottom,
+          transparent 0%,
+          rgba(0, 0, 0, 0.03) 45%,
+          rgba(0, 0, 0, 0.14) 100%
+        );
+      }
+
+      .scene-ground-wash {
+        background: linear-gradient(
+          to bottom,
+          color-mix(in srgb, var(--ground-soft) 0%, transparent) 0%,
+          color-mix(in srgb, var(--ground-soft) 46%, transparent) 38%,
+          color-mix(in srgb, var(--ground-hot) 32%, transparent) 100%
+        );
+        filter: saturate(1.45) brightness(1.28);
+      }
+
+      .scene-ground-reflect {
+        background: radial-gradient(
+          ellipse 52% 68% at 50% 100%,
+          color-mix(in srgb, var(--ground-hot) 92%, transparent) 0%,
+          color-mix(in srgb, var(--ground-soft) 52%, transparent) 36%,
+          transparent 74%
+        );
+        filter: blur(20px) saturate(1.5) brightness(1.32);
+      }
+
+      .scene-ground-line {
+        background: radial-gradient(
+          ellipse 62% 92% at 50% 50%,
+          color-mix(in srgb, var(--ground-core) 78%, transparent) 0%,
+          color-mix(in srgb, var(--ground-hot) 46%, transparent) 38%,
+          transparent 76%
+        );
+        filter: blur(11px) saturate(1.4) brightness(1.25);
+      }
+
       body.portal-life .ambient {
         background:
           radial-gradient(
@@ -2597,6 +2645,10 @@
         hint.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (guide.classList.contains('is-on') && !guide.classList.contains('is-out')) {
+            dismissGuide();
+            return;
+          }
           playGuide();
         });
       }
