@@ -128,7 +128,7 @@
       box-shadow:
         0 0 8px 1px color-mix(in srgb, var(--bloom-a) 80%, transparent),
         0 0 18px 2px color-mix(in srgb, var(--bloom-b) 45%, transparent);
-      transition: box-shadow 0.35s ease;
+      transition: box-shadow 0.48s ease;
     }
 
     .portal-shell.life-active {
@@ -156,26 +156,87 @@
       --rim-hot: #fff7ed;
     }
 
-    .portal-shell.chroma .portal-bloom {
+    @keyframes portalChromaBloomPulse {
+      0%, 100% { filter: blur(14px); }
+      50%      { filter: blur(22px); }
+    }
+
+    @keyframes portalChromaBloomPulseSoft {
+      0%, 100% { filter: blur(22px); }
+      50%      { filter: blur(32px); }
+    }
+
+    .portal-bloom-chroma,
+    .portal-bloom-chroma-soft,
+    .portal-rim-chroma {
+      position: absolute;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.55s ease;
+    }
+
+    .portal-bloom-chroma {
+      inset: calc(-1 * var(--bloom-outset));
+      border-radius: calc(var(--portal-radius) + var(--bloom-outset));
+      z-index: 0;
       background: conic-gradient(
         from var(--portal-spin),
         #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #ff006e
       );
+      animation:
+        portalSpin 7s linear infinite,
+        portalChromaBloomPulse 4.5s ease-in-out infinite;
     }
-    .portal-shell.chroma .portal-bloom-soft {
+
+    .portal-bloom-chroma-soft {
+      inset: calc(-1 * var(--bloom-soft-outset));
+      border-radius: calc(var(--portal-radius) + var(--bloom-soft-outset));
+      z-index: 0;
       background: conic-gradient(
         from var(--portal-spin),
         #ff4d6d, #c77dff, #4cc9f0, #80ed99, #ffd60a, #ff4d6d
       );
+      animation:
+        portalSpin 11s linear infinite,
+        portalChromaBloomPulseSoft 4.5s ease-in-out infinite;
     }
-    .portal-shell.chroma .portal-rim {
+
+    .portal-rim-chroma {
+      inset: calc(-1 * var(--rim-outset));
+      border-radius: calc(var(--portal-radius) + var(--rim-outset));
+      z-index: 1;
       background: conic-gradient(
         from var(--portal-spin),
         #fff, #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #fff
       );
+      animation: portalSpin 5.5s linear infinite;
+      padding: var(--rim-outset);
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
       box-shadow:
         0 0 10px 1px rgba(255, 255, 255, 0.7),
         0 0 22px 3px rgba(131, 56, 236, 0.55);
+    }
+
+    .portal-shell.chroma .portal-bloom-chroma,
+    .portal-shell.chroma .portal-bloom-chroma-soft {
+      opacity: 0.78;
+    }
+
+    .portal-shell.chroma .portal-rim-chroma {
+      opacity: 1;
+    }
+
+    .portal-shell:not(.chroma) .portal-bloom-chroma,
+    .portal-shell:not(.chroma) .portal-bloom-chroma-soft,
+    .portal-shell:not(.chroma) .portal-rim-chroma {
+      opacity: 0;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -273,13 +334,20 @@
       --ground-line-opacity: 0.70;
     }
 
-    body:has(.portal-shell.chroma) {
-      --ground-hot: #ff6b9d;
-      --ground-soft: #9b6dff;
-      --ground-core: #5aa9ff;
+    .scene-ground-chroma-wash,
+    .scene-ground-chroma-reflect,
+    .scene-ground-chroma-line {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.55s ease;
     }
 
-    body:has(.portal-shell.chroma) .scene-ground-wash {
+    .scene-ground-chroma-wash {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 100%;
       background: linear-gradient(
         to bottom,
         transparent 0%,
@@ -287,12 +355,17 @@
         color-mix(in srgb, #9b6dff 9%, transparent) 58%,
         color-mix(in srgb, #5aa9ff 7%, transparent) 100%
       );
-      opacity: 0.88;
       filter: saturate(1.08) hue-rotate(var(--chroma-hue));
       animation: chromaHue 11s linear infinite;
     }
 
-    body:has(.portal-shell.chroma) .scene-ground-reflect {
+    .scene-ground-chroma-reflect {
+      position: absolute;
+      left: 50%;
+      bottom: 18%;
+      width: 120%;
+      height: 70%;
+      transform: translateX(-50%);
       background: radial-gradient(
         ellipse 48% 60% at 50% 100%,
         rgba(255, 107, 157, 0.32) 0%,
@@ -301,11 +374,15 @@
         transparent 78%
       );
       filter: blur(26px) saturate(1.12) hue-rotate(var(--chroma-hue));
-      opacity: 0.78;
       animation: chromaHue 11s linear infinite;
     }
 
-    body:has(.portal-shell.chroma) .scene-ground-line {
+    .scene-ground-chroma-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 22%;
+      height: 48px;
       background: radial-gradient(
         ellipse 60% 90% at 50% 50%,
         rgba(255, 255, 255, 0.18) 0%,
@@ -314,14 +391,17 @@
         transparent 85%
       );
       filter: blur(14px) saturate(1.08) hue-rotate(var(--chroma-hue));
-      opacity: 0.65;
       animation: chromaHue 11s linear infinite;
     }
 
+    body:has(.portal-shell.chroma) .scene-ground-chroma-wash { opacity: 0.88; }
+    body:has(.portal-shell.chroma) .scene-ground-chroma-reflect { opacity: 0.78; }
+    body:has(.portal-shell.chroma) .scene-ground-chroma-line { opacity: 0.65; }
+
     @media (prefers-reduced-motion: reduce) {
-      body:has(.portal-shell.chroma) .scene-ground-wash,
-      body:has(.portal-shell.chroma) .scene-ground-reflect,
-      body:has(.portal-shell.chroma) .scene-ground-line {
+      .scene-ground-chroma-wash,
+      .scene-ground-chroma-reflect,
+      .scene-ground-chroma-line {
         animation: none;
       }
     }
@@ -440,7 +520,7 @@
         color-mix(in srgb, var(--ground-soft) 8%, transparent) 100%
       );
       opacity: var(--ground-wash-opacity);
-      transition: background 0.55s ease, opacity 0.55s ease;
+      transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
     }
 
     .scene-ground-reflect {
@@ -458,7 +538,7 @@
       );
       filter: blur(28px);
       opacity: var(--ground-reflect-opacity);
-      transition: background 0.55s ease, opacity 0.55s ease;
+      transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
     }
 
     .scene-ground-line {
@@ -475,7 +555,7 @@
       );
       filter: blur(16px);
       opacity: var(--ground-line-opacity);
-      transition: background 0.55s ease, opacity 0.55s ease;
+      transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
     }
 
     .header,
@@ -623,7 +703,7 @@
        the inner border, revealing the active world underneath.
        ============================================================ */
     @keyframes portalIntroFadeOut {
-      0%, 87% { opacity: 1; }
+      0%, 82% { opacity: 1; }
       100%    { opacity: 0; }
     }
 
@@ -633,7 +713,7 @@
       z-index: 6;
       pointer-events: none;
       overflow: hidden;
-      animation: portalIntroFadeOut 2.65s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      animation: portalIntroFadeOut 2.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
 
     .portal-intro-canvas {
@@ -1016,6 +1096,7 @@
     .os-mark {
       font-weight: 600;
       color: rgba(254, 254, 254, 0.377);
+      transition: color 0.48s ease;
     }
 
     .portal-shell.chroma .os-mark {
@@ -1372,6 +1453,7 @@
       width: 28px;
       height: 28px;
       display: block;
+      transition: opacity 0.25s ease;
     }
 
     @media (max-width: 768px) {
@@ -1750,22 +1832,18 @@
       background: #000000;
     }
 
-    body.portal-dark.portal-life .ambient,
-    body.portal-dark.portal-build .ambient,
-    body.portal-dark.portal-work .ambient,
-    body.portal-dark.portal-commerce .ambient,
-    body.portal-dark .ambient {
+    .theme-veil {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
       background: #000000;
+      opacity: 0;
+      transition: opacity 0.45s ease;
     }
 
-    @media (max-width: 768px) {
-      body.portal-dark.portal-life .ambient,
-      body.portal-dark.portal-build .ambient,
-      body.portal-dark.portal-work .ambient,
-      body.portal-dark.portal-commerce .ambient,
-      body.portal-dark .ambient {
-        background: #000000;
-      }
+    body.portal-dark .theme-veil {
+      opacity: 1;
     }
 
   </style>
@@ -1783,12 +1861,16 @@
     })();
   </script>
   <div class="ambient" aria-hidden="true"></div>
+  <div class="theme-veil" aria-hidden="true"></div>
 
   <div class="scene-ground" id="sceneGround" aria-hidden="true">
     <div class="scene-ground-plane"></div>
     <div class="scene-ground-wash"></div>
     <div class="scene-ground-reflect"></div>
     <div class="scene-ground-line"></div>
+    <div class="scene-ground-chroma-wash"></div>
+    <div class="scene-ground-chroma-reflect"></div>
+    <div class="scene-ground-chroma-line"></div>
   </div>
 
 
@@ -1833,8 +1915,11 @@
   <div class="portal-stage" id="stage">
     <div class="portal-shell life-active chroma" id="portalShell">
       <div class="portal-bloom-soft" aria-hidden="true"></div>
+      <div class="portal-bloom-chroma-soft" aria-hidden="true"></div>
       <div class="portal-bloom" aria-hidden="true"></div>
+      <div class="portal-bloom-chroma" aria-hidden="true"></div>
       <div class="portal-rim" aria-hidden="true"></div>
+      <div class="portal-rim-chroma" aria-hidden="true"></div>
 
       <button class="guide-hint" id="guideHint" type="button" aria-label="Show portal guide" aria-hidden="true">
         <svg viewBox="0 0 36 36" aria-hidden="true">
@@ -2092,7 +2177,7 @@
     // (matches .portal-intro's CSS fade-out duration below). The
     // first-load guide overlay waits for this to finish, plus its
     // own buffer, before it appears — see initPortalGuide().
-    const PORTAL_INTRO_VISIBLE_MS = 2650;
+    const PORTAL_INTRO_VISIBLE_MS = 2800;
 
     (function initPortalIntro() {
       const introEl = document.getElementById('portalIntro');
@@ -2220,6 +2305,7 @@
       const HOLD_MS = 950;
       const OPEN_MS = 1350;
       const TOTAL_MS = HOLD_MS + OPEN_MS;
+      const CHROMA_OFF_MS = HOLD_MS;
       const ROTATION_MS = 8000;
 
       function easeInOutCubic(t) {
@@ -2303,7 +2389,11 @@
 
         punchReveal(glowCtx, cx, cy, revealR);
 
-        if (elapsed < TOTAL_MS + 60) {
+        if (elapsed >= CHROMA_OFF_MS) {
+          portalShell.classList.remove('chroma');
+        }
+
+        if (elapsed < TOTAL_MS) {
           rafId = requestAnimationFrame(draw);
         }
       }
@@ -2316,8 +2406,8 @@
         if (e.target === introEl) cleanup();
       });
 
-      // Safety net in case the animationend event is missed.
-      setTimeout(cleanup, TOTAL_MS + 1300);
+      setTimeout(() => portalShell.classList.remove('chroma'), CHROMA_OFF_MS);
+      setTimeout(cleanup, PORTAL_INTRO_VISIBLE_MS + 80);
     })();
 
     (function initPortalGuide() {
