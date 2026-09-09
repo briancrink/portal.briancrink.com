@@ -1916,13 +1916,17 @@
       animation: guideTapHand 1.25s cubic-bezier(0.22, 0.61, 0.36, 1) 2.85s both;
     }
 
-    .portal-guide.is-play .guide-gesture.is-left .guide-trail,
-    .portal-guide.is-play .guide-gesture.is-right .guide-trail {
-      animation: guideTrail 1.2s ease-out both;
+    .portal-guide.is-play .guide-gesture.is-left .guide-trail {
+      animation:
+        guideTrailIn 1.2s ease-out 0.15s both,
+        guideTrailPulse 1.1s ease-in-out 1.35s infinite;
     }
 
-    .portal-guide.is-play .guide-gesture.is-left .guide-trail { animation-delay: 0.15s; }
-    .portal-guide.is-play .guide-gesture.is-right .guide-trail { animation-delay: 1.5s; }
+    .portal-guide.is-play .guide-gesture.is-right .guide-trail {
+      animation:
+        guideTrailIn 1.2s ease-out 1.5s both,
+        guideTrailPulse 1.1s ease-in-out 2.7s infinite;
+    }
 
     .guide-gesture.is-tap .guide-ripple {
       transform-box: fill-box;
@@ -1930,21 +1934,23 @@
     }
 
     .portal-guide.is-play .guide-gesture.is-tap .guide-ripple {
-      animation: guideRipple 1.25s ease-out 2.85s both;
+      animation:
+        guideRippleIn 1.25s ease-out 2.85s both,
+        guideRipplePulse 1.05s ease-in-out 4.1s 3;
     }
 
     @keyframes guideSwipeLeft {
       0%   { opacity: 0; transform: translateX(26px); }
       16%  { opacity: 1; }
       78%  { opacity: 1; transform: translateX(-28px); }
-      100% { opacity: 0; transform: translateX(-36px); }
+      100% { opacity: 1; transform: translateX(-20px); }
     }
 
     @keyframes guideSwipeRight {
       0%   { opacity: 0; transform: translateX(-26px); }
       16%  { opacity: 1; }
       78%  { opacity: 1; transform: translateX(28px); }
-      100% { opacity: 0; transform: translateX(36px); }
+      100% { opacity: 1; transform: translateX(20px); }
     }
 
     @keyframes guideTapHand {
@@ -1952,27 +1958,35 @@
       18%  { opacity: 1; transform: translateY(0); }
       42%  { transform: translateY(7px) scale(0.94); }
       62%  { transform: translateY(0) scale(1); }
-      82%  { opacity: 1; }
-      100% { opacity: 0; transform: translateY(0); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    @keyframes guideTrail {
+    @keyframes guideTrailIn {
       0%   { opacity: 0; }
-      22%  { opacity: 0.85; }
-      100% { opacity: 0; }
+      22%  { opacity: 0.95; }
+      100% { opacity: 0.85; }
     }
 
-    @keyframes guideRipple {
+    @keyframes guideTrailPulse {
+      0%, 100% { opacity: 0.28; }
+      50%      { opacity: 1; }
+    }
+
+    @keyframes guideRippleIn {
       0%   { opacity: 0; transform: scale(0.45); }
-      24%  { opacity: 0.75; }
-      100% { opacity: 0; transform: scale(1.55); }
+      24%  { opacity: 0.75; transform: scale(1.08); }
+      100% { opacity: 0.55; transform: scale(1.12); }
+    }
+
+    @keyframes guideRipplePulse {
+      0%, 100% { opacity: 0.22; transform: scale(1.08); }
+      50%      { opacity: 0.9; transform: scale(1.22); }
     }
 
     @keyframes guideKeyIn {
       0%   { opacity: 0; }
       14%  { opacity: 1; }
-      86%  { opacity: 1; }
-      100% { opacity: 0; }
+      100% { opacity: 1; }
     }
 
     @keyframes guideKeyPress {
@@ -2612,7 +2626,7 @@
       const loadDelayMs = reduce ? 2000 : PORTAL_INTRO_VISIBLE_MS + 1500;
       const fadeInMs = reduce ? 120 : 320;
       const playMs = reduce ? 800 : 4200;
-      const holdMs = 2000;
+      const holdMs = 2600;
       const fadeMs = 280;
       const timers = [];
 
