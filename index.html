@@ -1628,28 +1628,24 @@
       z-index: 24;
       border-radius: inherit;
       overflow: hidden;
-      opacity: 0.001;
+      opacity: 1;
       visibility: hidden;
       pointer-events: none;
       isolation: isolate;
       transform: translateZ(0);
     }
 
-    .portal-guide.is-ready {
+    .portal-guide.is-ready,
+    .portal-guide.is-on {
       visibility: visible;
     }
 
     .portal-guide.is-on {
-      opacity: 1;
-      visibility: visible;
       pointer-events: auto;
-      transition: opacity 0.85s linear;
     }
 
     .portal-guide.is-out {
-      opacity: 0;
       pointer-events: none;
-      transition: opacity 0.75s linear;
     }
 
     .portal-guide-glass {
@@ -1658,8 +1654,41 @@
       background: rgba(8, 12, 20, 0.28);
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
+      opacity: 0.001;
       transform: translateZ(0);
-      will-change: opacity;
+      transition: opacity 0.32s ease;
+    }
+
+    .portal-guide.is-on .portal-guide-glass {
+      opacity: 1;
+    }
+
+    .portal-guide.is-out .portal-guide-glass {
+      opacity: 0;
+      transition: opacity 0.28s ease;
+    }
+
+    .portal-guide-vline,
+    .portal-guide-hline,
+    .portal-guide-pane,
+    .portal-guide-base {
+      opacity: 0;
+      transition: opacity 0.32s ease;
+    }
+
+    .portal-guide.is-on .portal-guide-vline,
+    .portal-guide.is-on .portal-guide-hline,
+    .portal-guide.is-on .portal-guide-pane,
+    .portal-guide.is-on .portal-guide-base {
+      opacity: 1;
+    }
+
+    .portal-guide.is-out .portal-guide-vline,
+    .portal-guide.is-out .portal-guide-hline,
+    .portal-guide.is-out .portal-guide-pane,
+    .portal-guide.is-out .portal-guide-base {
+      opacity: 0;
+      transition: opacity 0.28s ease;
     }
 
     .portal-guide-vline {
@@ -2581,10 +2610,10 @@
       // 1.5s buffer before the guide appears. Reduced-motion users never
       // see the swirl, so they keep the original short load delay.
       const loadDelayMs = reduce ? 2000 : PORTAL_INTRO_VISIBLE_MS + 1500;
-      const fadeInMs = reduce ? 200 : 850;
+      const fadeInMs = reduce ? 120 : 320;
       const playMs = reduce ? 800 : 4200;
       const holdMs = 2000;
-      const fadeMs = 750;
+      const fadeMs = 280;
       const timers = [];
 
       function later(fn, ms) {
