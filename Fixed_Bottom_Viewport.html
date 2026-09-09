@@ -14,16 +14,11 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html {
+    html, body {
       height: 100%;
-      min-height: 100%;
-      overflow: visible;
-      overscroll-behavior: none;
-    }
-
-    body {
-      min-height: 100%;
-      overflow: visible;
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
       overscroll-behavior: none;
     }
 
@@ -133,7 +128,7 @@
       box-shadow:
         0 0 8px 1px color-mix(in srgb, var(--bloom-a) 80%, transparent),
         0 0 18px 2px color-mix(in srgb, var(--bloom-b) 45%, transparent);
-      transition: box-shadow 0.48s ease;
+      transition: box-shadow 0.35s ease;
     }
 
     .portal-shell.life-active {
@@ -161,87 +156,26 @@
       --rim-hot: #fff7ed;
     }
 
-    @keyframes portalChromaBloomPulse {
-      0%, 100% { filter: blur(14px); }
-      50%      { filter: blur(22px); }
-    }
-
-    @keyframes portalChromaBloomPulseSoft {
-      0%, 100% { filter: blur(22px); }
-      50%      { filter: blur(32px); }
-    }
-
-    .portal-bloom-chroma,
-    .portal-bloom-chroma-soft,
-    .portal-rim-chroma {
-      position: absolute;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.55s ease;
-    }
-
-    .portal-bloom-chroma {
-      inset: calc(-1 * var(--bloom-outset));
-      border-radius: calc(var(--portal-radius) + var(--bloom-outset));
-      z-index: 0;
+    .portal-shell.chroma .portal-bloom {
       background: conic-gradient(
         from var(--portal-spin),
         #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #ff006e
       );
-      animation:
-        portalSpin 7s linear infinite,
-        portalChromaBloomPulse 4.5s ease-in-out infinite;
     }
-
-    .portal-bloom-chroma-soft {
-      inset: calc(-1 * var(--bloom-soft-outset));
-      border-radius: calc(var(--portal-radius) + var(--bloom-soft-outset));
-      z-index: 0;
+    .portal-shell.chroma .portal-bloom-soft {
       background: conic-gradient(
         from var(--portal-spin),
         #ff4d6d, #c77dff, #4cc9f0, #80ed99, #ffd60a, #ff4d6d
       );
-      animation:
-        portalSpin 11s linear infinite,
-        portalChromaBloomPulseSoft 4.5s ease-in-out infinite;
     }
-
-    .portal-rim-chroma {
-      inset: calc(-1 * var(--rim-outset));
-      border-radius: calc(var(--portal-radius) + var(--rim-outset));
-      z-index: 1;
+    .portal-shell.chroma .portal-rim {
       background: conic-gradient(
         from var(--portal-spin),
         #fff, #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #fff
       );
-      animation: portalSpin 5.5s linear infinite;
-      padding: var(--rim-outset);
-      -webkit-mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-      mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
       box-shadow:
         0 0 10px 1px rgba(255, 255, 255, 0.7),
         0 0 22px 3px rgba(131, 56, 236, 0.55);
-    }
-
-    .portal-shell.chroma .portal-bloom-chroma,
-    .portal-shell.chroma .portal-bloom-chroma-soft {
-      opacity: 0.78;
-    }
-
-    .portal-shell.chroma .portal-rim-chroma {
-      opacity: 1;
-    }
-
-    .portal-shell:not(.chroma) .portal-bloom-chroma,
-    .portal-shell:not(.chroma) .portal-bloom-chroma-soft,
-    .portal-shell:not(.chroma) .portal-rim-chroma {
-      opacity: 0;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -261,41 +195,37 @@
     }
 
     html {
-      background: #020617;
+      height: 100%;
+      background: #000000;
       transition: background 0.55s ease;
     }
 
     html:has(body.portal-life)     { background: #020617; }
     html:has(body.portal-build)    { background: #03140a; }
-    html:has(body.portal-work)     { background: #070016; }
+    html:has(body.portal-work)     { background: #000000; }
     html:has(body.portal-commerce) { background: #321200; }
 
     body {
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--page-base, #020617);
-      --page-base: #020617;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100%;
+      height: 100dvh;
+      max-height: 100dvh;
+      padding: 0 16px 28px;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: transparent;
+      transition: background 0.55s ease;
       --ground-hot: #7dd3fc;
       --ground-soft: #38bdf8;
       --ground-core: #e0f2fe;
       --ground-wash-opacity: 0.85;
       --ground-reflect-opacity: 0.75;
       --ground-line-opacity: 0.55;
-    }
-
-    .app-lock {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      width: 100%;
-      height: 100dvh;
-      min-height: 100dvh;
-      padding: 0 16px 28px;
-      overflow: hidden;
-      overscroll-behavior: none;
     }
 
     @keyframes fadeIn {
@@ -311,7 +241,6 @@
     }
 
     body.portal-life {
-      --page-base: #020617;
       --ground-hot: #7dd3fc;
       --ground-soft: #38bdf8;
       --ground-core: #e0f2fe;
@@ -320,7 +249,6 @@
       --ground-line-opacity: 0.70;
     }
     body.portal-build {
-      --page-base: #03140a;
       --ground-hot: #4ade80;
       --ground-soft: #22c55e;
       --ground-core: #bbf7d0;
@@ -329,7 +257,6 @@
       --ground-line-opacity: 0.70;
     }
     body.portal-work {
-      --page-base: #070016;
       --ground-hot: #5a6677;
       --ground-soft: #303d4f;
       --ground-core: #94a3b8;
@@ -338,7 +265,6 @@
       --ground-line-opacity: 0.55;
     }
     body.portal-commerce {
-      --page-base: #321200;
       --ground-hot: #fb923c;
       --ground-soft: #f97316;
       --ground-core: #ffedd5;
@@ -347,20 +273,13 @@
       --ground-line-opacity: 0.70;
     }
 
-    .scene-ground-chroma-wash,
-    .scene-ground-chroma-reflect,
-    .scene-ground-chroma-line {
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.55s ease;
+    body:has(.portal-shell.chroma) {
+      --ground-hot: #ff6b9d;
+      --ground-soft: #9b6dff;
+      --ground-core: #5aa9ff;
     }
 
-    .scene-ground-chroma-wash {
-      position: absolute;
-      left: 0;
-      right: 0;
-      top: 0;
-      height: 100%;
+    body:has(.portal-shell.chroma) .scene-ground-wash {
       background: linear-gradient(
         to bottom,
         transparent 0%,
@@ -368,17 +287,12 @@
         color-mix(in srgb, #9b6dff 9%, transparent) 58%,
         color-mix(in srgb, #5aa9ff 7%, transparent) 100%
       );
+      opacity: 0.88;
       filter: saturate(1.08) hue-rotate(var(--chroma-hue));
       animation: chromaHue 11s linear infinite;
     }
 
-    .scene-ground-chroma-reflect {
-      position: absolute;
-      left: 50%;
-      bottom: 18%;
-      width: 120%;
-      height: 70%;
-      transform: translateX(-50%);
+    body:has(.portal-shell.chroma) .scene-ground-reflect {
       background: radial-gradient(
         ellipse 48% 60% at 50% 100%,
         rgba(255, 107, 157, 0.32) 0%,
@@ -387,15 +301,11 @@
         transparent 78%
       );
       filter: blur(26px) saturate(1.12) hue-rotate(var(--chroma-hue));
+      opacity: 0.78;
       animation: chromaHue 11s linear infinite;
     }
 
-    .scene-ground-chroma-line {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 22%;
-      height: 48px;
+    body:has(.portal-shell.chroma) .scene-ground-line {
       background: radial-gradient(
         ellipse 60% 90% at 50% 50%,
         rgba(255, 255, 255, 0.18) 0%,
@@ -404,30 +314,25 @@
         transparent 85%
       );
       filter: blur(14px) saturate(1.08) hue-rotate(var(--chroma-hue));
+      opacity: 0.65;
       animation: chromaHue 11s linear infinite;
     }
 
-    body:has(.portal-shell.chroma) .scene-ground-chroma-wash { opacity: 0.88; }
-    body:has(.portal-shell.chroma) .scene-ground-chroma-reflect { opacity: 0.78; }
-    body:has(.portal-shell.chroma) .scene-ground-chroma-line { opacity: 0.65; }
-
     @media (prefers-reduced-motion: reduce) {
-      .scene-ground-chroma-wash,
-      .scene-ground-chroma-reflect,
-      .scene-ground-chroma-line {
+      body:has(.portal-shell.chroma) .scene-ground-wash,
+      body:has(.portal-shell.chroma) .scene-ground-reflect,
+      body:has(.portal-shell.chroma) .scene-ground-line {
         animation: none;
       }
     }
 
     .ambient {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: auto;
+      inset: 0;
       width: 100%;
-      height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
-      min-height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
+      height: 100%;
+      min-height: 100dvh;
+      min-height: -webkit-fill-available;
       z-index: 0;
       pointer-events: none;
       transition: background 0.55s ease;
@@ -455,30 +360,12 @@
     }
 
     @media (max-width: 768px) {
-      html {
-        transition: none;
-      }
-
-      .ambient,
-      .theme-veil {
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: auto;
-        height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
-        min-height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
-      }
-
-      .scene-ground {
-        height: min(36vh, 300px);
-      }
-
       body.portal-life .ambient {
         background:
           radial-gradient(
-            ellipse 140% 170% at 50% 48%,
+            ellipse 120% 140% at 50% 40%,
             rgba(14, 164, 233, 0.85) 0%,
-            rgba(14, 164, 233, 0.38) 62%,
+            rgba(14, 164, 233, 0.3) 50%,
             #020617 100%
           ),
           #020617;
@@ -486,9 +373,9 @@
       body.portal-build .ambient {
         background:
           radial-gradient(
-            ellipse 140% 170% at 50% 48%,
+            ellipse 120% 140% at 50% 40%,
             rgba(22, 163, 74, 0.85) 0%,
-            rgba(22, 163, 74, 0.38) 62%,
+            rgba(22, 163, 74, 0.3) 50%,
             #03140a 100%
           ),
           #03140a;
@@ -496,9 +383,9 @@
       body.portal-work .ambient {
         background:
           radial-gradient(
-            ellipse 140% 170% at 50% 48%,
+            ellipse 120% 140% at 50% 40%,
             rgba(120, 32, 244, 0.811) 0%,
-            rgba(76, 22, 153, 0.35) 62%,
+            rgba(76, 22, 153, 0.293) 50%,
             rgb(6, 2, 13) 100%
           ),
           rgb(6, 2, 13);
@@ -506,9 +393,9 @@
       body.portal-commerce .ambient {
         background:
           radial-gradient(
-            ellipse 140% 170% at 50% 48%,
+            ellipse 120% 140% at 50% 40%,
             rgba(255, 89, 0, 0.85) 0%,
-            rgba(255, 89, 0, 0.42) 62%,
+            rgba(255, 89, 0, 0.3) 50%,
             #321200 100%
           ),
           #321200;
@@ -553,7 +440,7 @@
         color-mix(in srgb, var(--ground-soft) 8%, transparent) 100%
       );
       opacity: var(--ground-wash-opacity);
-      transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
+      transition: background 0.55s ease, opacity 0.55s ease;
     }
 
     .scene-ground-reflect {
@@ -571,7 +458,7 @@
       );
       filter: blur(28px);
       opacity: var(--ground-reflect-opacity);
-      transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
+      transition: background 0.55s ease, opacity 0.55s ease;
     }
 
     .scene-ground-line {
@@ -588,7 +475,7 @@
       );
       filter: blur(16px);
       opacity: var(--ground-line-opacity);
-      transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
+      transition: background 0.55s ease, opacity 0.55s ease;
     }
 
     .header,
@@ -599,7 +486,7 @@
     }
 
     .header {
-      padding: 90px 20px 0px;
+      padding: 130px 20px 0px;
       text-align: center;
       position: relative;
       z-index: 2;
@@ -607,7 +494,7 @@
 
     @media (max-width: 768px) {
       .header {
-        padding-top: 90px;
+        padding-top: 80px;
       }
     }
 
@@ -726,47 +613,6 @@
       border-color: rgba(253, 186, 116, 0.5);
       filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.28))
               drop-shadow(0 0 8px rgba(249, 115, 22, 0.12));
-    }
-
-    /* ============================================================
-       Portal intro — one-time swirling energy-vortex aperture
-       played on initial load (rendered on canvas, see
-       initPortalIntro()). Starts covering the whole rectangular
-       window, then opens outward from the center until it clears
-       the inner border, revealing the active world underneath.
-       ============================================================ */
-    @keyframes portalIntroFadeOut {
-      0%, 82% { opacity: 1; }
-      100%    { opacity: 0; }
-    }
-
-    .portal-intro {
-      position: absolute;
-      inset: 0;
-      z-index: 6;
-      pointer-events: none;
-      overflow: hidden;
-      animation: portalIntroFadeOut 2.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-
-    .portal-intro-canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    /* The glow layer is blurred and additively blended at the GPU
-       compositor level (cheap) instead of using per-stroke canvas
-       shadowBlur (expensive) — same look, far less CPU work. */
-    .portal-intro-canvas-glow {
-      filter: blur(6px);
-      mix-blend-mode: screen;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .portal-intro { display: none; }
     }
 
 
@@ -1129,7 +975,6 @@
     .os-mark {
       font-weight: 600;
       color: rgba(254, 254, 254, 0.377);
-      transition: color 0.48s ease;
     }
 
     .portal-shell.chroma .os-mark {
@@ -1459,114 +1304,40 @@
       }
     }
 
-    .chrome-btns {
-      --hint-tint: #7dd3fc;
+    .toggle-btn {
       position: fixed;
       top: 20px;
       right: 16px;
       z-index: 30;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-      pointer-events: none;
-    }
-
-    .chrome-btns > button {
+      background: transparent;
+      border: none;
+      width: 36px;
+      height: 36px;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 50%;
+      transition: transform 0.3s;
+      flex-shrink: 0;
+      color: #ffffff;
+      overflow: visible;
       pointer-events: auto;
     }
 
-    body.portal-life .chrome-btns { --hint-tint: #7dd3fc; }
-    body.portal-build .chrome-btns { --hint-tint: #00ff9d; }
-    body.portal-work .chrome-btns { --hint-tint: #9c88ff; }
-    body.portal-commerce .chrome-btns { --hint-tint: #fb923c; }
-    body.portal-dark .chrome-btns { --hint-tint: #d4d4d8; }
-
-    .toggle-btn {
-      position: relative;
-      z-index: 1;
-      background: color-mix(in srgb, var(--hint-tint) 16%, rgba(8, 12, 20, 0.42));
-      border: none;
-      width: 32px;
-      height: 32px;
-      cursor: pointer;
-      padding: 0;
-      border-radius: 50%;
-      transition: transform 0.3s, opacity 0.2s ease;
-      flex-shrink: 0;
-      color: color-mix(in srgb, var(--hint-tint) 22%, #ffffff);
-      overflow: visible;
-      isolation: isolate;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 0;
-    }
-
-    .toggle-btn.is-pressed {
-      opacity: 0.42;
-    }
-
-    .toggle-btn::before,
-    .toggle-btn::after {
-      content: "";
-      position: absolute;
-      border-radius: 50%;
-      pointer-events: none;
-    }
-
-    .toggle-btn::before {
-      inset: 0;
-      padding: 2px;
-      background: conic-gradient(
-        from var(--portal-spin),
-        rgba(255, 255, 255, 0.4) 0deg,
-        rgba(255, 255, 255, 0.12) 40deg,
-        rgba(255, 255, 255, 0.06) 120deg,
-        rgba(255, 255, 255, 0.06) 240deg,
-        rgba(255, 255, 255, 0.12) 320deg,
-        rgba(255, 255, 255, 0.4) 360deg
-      );
-      -webkit-mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-      mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      animation: portalSpin 5.5s linear infinite;
-      filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
-    }
-
-    .toggle-btn::after {
-      inset: 2px;
-      border: 0;
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hint-tint) 28%, rgba(255, 255, 255, 0.72));
-      z-index: 1;
+    .toggle-btn:hover {
+      transform: rotate(20deg);
     }
 
     .toggle-btn svg {
-      position: relative;
-      z-index: 1;
-      width: 16px;
-      height: 16px;
+      width: 28px;
+      height: 28px;
       display: block;
-      transition: opacity 0.25s ease;
     }
 
     @media (max-width: 768px) {
-      .chrome-btns {
-        position: relative;
-        top: auto;
-        right: auto;
-        z-index: 4;
-        justify-content: center;
-        width: 100%;
-        margin: 8px 0 0;
-      }
-
       .toggle-btn {
+        top: calc(36px + env(safe-area-inset-top, 0px));
+        right: calc(10px + env(safe-area-inset-right, 0px));
+        z-index: 1000;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
       }
@@ -1686,17 +1457,18 @@
     }
 
     .guide-hint {
-      position: relative;
-      top: auto;
-      right: auto;
-      z-index: 1;
+      --hint-tint: #7dd3fc;
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 12;
       width: 32px;
       height: 32px;
       padding: 0;
       color: color-mix(in srgb, var(--hint-tint) 22%, #ffffff);
-      opacity: 0.92;
-      pointer-events: auto;
-      background: color-mix(in srgb, var(--hint-tint) 16%, rgba(8, 12, 20, 0.42));
+      opacity: 0;
+      pointer-events: none;
+      background: transparent;
       border: none;
       border-radius: 50%;
       cursor: pointer;
@@ -1706,7 +1478,6 @@
       line-height: 0;
       filter: none;
       isolation: isolate;
-      flex-shrink: 0;
       transition: opacity 0.7s ease, color 0.45s ease;
     }
 
@@ -1720,32 +1491,24 @@
 
     .guide-hint::before {
       inset: 0;
-      padding: 2px;
       background: conic-gradient(
         from var(--portal-spin),
-        rgba(255, 255, 255, 0.4) 0deg,
-        rgba(255, 255, 255, 0.12) 40deg,
-        rgba(255, 255, 255, 0.06) 120deg,
-        rgba(255, 255, 255, 0.06) 240deg,
-        rgba(255, 255, 255, 0.12) 320deg,
-        rgba(255, 255, 255, 0.4) 360deg
+        rgba(255, 255, 255, 0.95) 0deg,
+        rgba(255, 255, 255, 0.55) 40deg,
+        rgba(255, 255, 255, 0.38) 120deg,
+        rgba(255, 255, 255, 0.38) 240deg,
+        rgba(255, 255, 255, 0.55) 320deg,
+        rgba(255, 255, 255, 0.95) 360deg
       );
-      -webkit-mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-      mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
       animation: portalSpin 5.5s linear infinite;
-      filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.4));
+      filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
     }
 
     .guide-hint::after {
       inset: 2px;
-      border: 0;
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hint-tint) 28%, rgba(255, 255, 255, 0.72));
+      border: 1px solid color-mix(in srgb, var(--hint-tint) 28%, rgba(255, 255, 255, 0.72));
       z-index: 1;
     }
 
@@ -1758,23 +1521,34 @@
       overflow: visible;
     }
 
-    .guide-hint.is-pressed {
+    body.portal-life .guide-hint { --hint-tint: #7dd3fc; }
+    body.portal-build .guide-hint { --hint-tint: #00ff9d; }
+    body.portal-work .guide-hint { --hint-tint: #9c88ff; }
+    body.portal-commerce .guide-hint { --hint-tint: #fb923c; }
+    body.portal-dark .guide-hint { --hint-tint: #d4d4d8; }
+
+    .guide-hint.is-on {
+      opacity: 0.92;
+      pointer-events: auto;
+    }
+
+    .guide-hint.is-on:hover {
+      opacity: 0.62;
+    }
+
+    .guide-hint.is-on:active {
       opacity: 0.42;
     }
 
-    @media (hover: hover) and (pointer: fine) {
-      .toggle-btn:hover {
-        transform: rotate(20deg);
-        opacity: 0.62;
-      }
-      .guide-hint:hover {
-        opacity: 0.62;
+    @media (max-width: 768px) {
+      .guide-hint {
+        top: 12px;
+        right: 12px;
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .guide-hint::before,
-      .toggle-btn::before {
+      .guide-hint::before {
         animation: none;
       }
     }
@@ -1931,29 +1705,26 @@
       }
     }
 
-    html:has(body.portal-dark),
-    body.portal-dark {
-      --page-base: #000000;
+    html:has(body.portal-dark) {
       background: #000000;
     }
 
-    .theme-veil {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: auto;
-      height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
-      min-height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
-      z-index: 0;
-      pointer-events: none;
+    body.portal-dark.portal-life .ambient,
+    body.portal-dark.portal-build .ambient,
+    body.portal-dark.portal-work .ambient,
+    body.portal-dark.portal-commerce .ambient,
+    body.portal-dark .ambient {
       background: #000000;
-      opacity: 0;
-      transition: opacity 0.45s ease;
     }
 
-    body.portal-dark .theme-veil {
-      opacity: 1;
+    @media (max-width: 768px) {
+      body.portal-dark.portal-life .ambient,
+      body.portal-dark.portal-build .ambient,
+      body.portal-dark.portal-work .ambient,
+      body.portal-dark.portal-commerce .ambient,
+      body.portal-dark .ambient {
+        background: #000000;
+      }
     }
 
   </style>
@@ -1968,25 +1739,22 @@
       document.body.classList.remove('portal-life', 'portal-build', 'portal-work', 'portal-commerce');
       document.body.classList.add('portal-' + name);
       document.documentElement.style.background = theme[name];
-      var meta = document.getElementById('themeColor');
-      if (meta) meta.setAttribute('content', theme[name]);
     })();
   </script>
   <div class="ambient" aria-hidden="true"></div>
-  <div class="theme-veil" aria-hidden="true"></div>
 
   <div class="scene-ground" id="sceneGround" aria-hidden="true">
     <div class="scene-ground-plane"></div>
     <div class="scene-ground-wash"></div>
     <div class="scene-ground-reflect"></div>
     <div class="scene-ground-line"></div>
-    <div class="scene-ground-chroma-wash"></div>
-    <div class="scene-ground-chroma-reflect"></div>
-    <div class="scene-ground-chroma-line"></div>
   </div>
 
 
-  <div class="app-lock">
+  <button class="toggle-btn" id="theme-toggle" type="button" aria-label="Dark mode">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 14.35A9 9 0 1 1 9.65 3 7.15 7.15 0 0 0 21 14.35z"/></svg>
+  </button>
+
   <div class="header">
     <h1 class="name">
       <a href="https://briancrink.com" class="name-link">Brian Crink</a>
@@ -2019,27 +1787,21 @@
         </span>
       </p>
     </h1>
-    <div class="chrome-btns">
-      <button class="guide-hint" id="guideHint" type="button" aria-label="Show portal guide">
-        <svg viewBox="0 0 36 36" aria-hidden="true">
-          <circle cx="18" cy="11.2" r="1.72" fill="currentColor" fill-opacity="0.82"/>
-          <rect x="16.7" y="15.2" width="2.6" height="11.4" rx="1.3" fill="currentColor" fill-opacity="0.82"/>
-        </svg>
-      </button>
-      <button class="toggle-btn" id="theme-toggle" type="button" aria-label="Dark mode">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 14.35A9 9 0 1 1 9.65 3 7.15 7.15 0 0 0 21 14.35z"/></svg>
-      </button>
-    </div>
   </div>
 
   <div class="portal-stage" id="stage">
-    <div class="portal-shell life-active chroma" id="portalShell">
+    <div class="portal-shell life-active" id="portalShell">
       <div class="portal-bloom-soft" aria-hidden="true"></div>
-      <div class="portal-bloom-chroma-soft" aria-hidden="true"></div>
       <div class="portal-bloom" aria-hidden="true"></div>
-      <div class="portal-bloom-chroma" aria-hidden="true"></div>
       <div class="portal-rim" aria-hidden="true"></div>
-      <div class="portal-rim-chroma" aria-hidden="true"></div>
+
+      <button class="guide-hint" id="guideHint" type="button" aria-label="Show portal guide" aria-hidden="true">
+        <svg viewBox="0 0 36 36" aria-hidden="true">
+          <circle cx="18" cy="18" r="14" fill="currentColor" fill-opacity="0.16"/>
+          <circle cx="18" cy="11.2" r="1.72" fill="currentColor" fill-opacity="0.58"/>
+          <rect x="16.7" y="15.2" width="2.6" height="11.4" rx="1.3" fill="currentColor" fill-opacity="0.58"/>
+        </svg>
+      </button>
 
       <div class="portal life-active" id="portal">
 
@@ -2225,11 +1987,6 @@
         </div>
       </section>
 
-      <div class="portal-intro" id="portalIntro" aria-hidden="true">
-        <canvas class="portal-intro-canvas portal-intro-canvas-crisp" id="portalIntroCrisp"></canvas>
-        <canvas class="portal-intro-canvas portal-intro-canvas-glow" id="portalIntroGlow"></canvas>
-      </div>
-
       </div>
     </div>
   </div>
@@ -2272,7 +2029,6 @@
       </svg>
     </div>
   </div>
-  </div>
 
   <script>
     const body = document.body;
@@ -2286,253 +2042,13 @@
     const blades = [...document.querySelectorAll('.blade')];
     const buildIcons = [...document.querySelectorAll('.build-icon')];
 
-    // Total real-world time the swirling portal intro stays visible
-    // (matches .portal-intro's CSS fade-out duration below). The
-    // first-load guide overlay waits for this to finish, plus its
-    // own buffer, before it appears — see initPortalGuide().
-    const PORTAL_INTRO_VISIBLE_MS = 2800;
-
-    (function initPortalIntro() {
-      const introEl = document.getElementById('portalIntro');
-      const crispCanvas = document.getElementById('portalIntroCrisp');
-      const glowCanvas = document.getElementById('portalIntroGlow');
-      if (!introEl || !crispCanvas || !glowCanvas) return;
-
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      let finished = false;
-      let rafId = null;
-      function cleanup() {
-        if (finished) return;
-        finished = true;
-        if (rafId) cancelAnimationFrame(rafId);
-        window.removeEventListener('resize', resize);
-        portalShell.classList.remove('chroma');
-        introEl.remove();
-      }
-
-      if (reduceMotion) {
-        cleanup();
-        return;
-      }
-
-      const crispCtx = crispCanvas.getContext('2d');
-      const glowCtx = glowCanvas.getContext('2d');
-      // The glow layer is blurred via CSS afterward, so it doesn't need
-      // retina-sharp detail — rendering it at a lower pixel density (and
-      // letting the compositor scale it up) cuts its fill cost sharply.
-      const dprCrisp = Math.min(window.devicePixelRatio || 1, 1.5);
-      const dprGlow = Math.min(window.devicePixelRatio || 1, 1);
-      let width = 0, height = 0, fillR = 0, coreBase = 0, cornerR = 0;
-      let bgGradient = null, coreGradient = null;
-
-      function resize() {
-        const rect = introEl.getBoundingClientRect();
-        width = Math.max(1, rect.width);
-        height = Math.max(1, rect.height);
-
-        crispCanvas.width = Math.round(width * dprCrisp);
-        crispCanvas.height = Math.round(height * dprCrisp);
-        crispCanvas.style.width = width + 'px';
-        crispCanvas.style.height = height + 'px';
-        crispCtx.setTransform(dprCrisp, 0, 0, dprCrisp, 0, 0);
-        crispCtx.lineCap = 'round';
-        crispCtx.lineJoin = 'round';
-
-        glowCanvas.width = Math.round(width * dprGlow);
-        glowCanvas.height = Math.round(height * dprGlow);
-        glowCanvas.style.width = width + 'px';
-        glowCanvas.style.height = height + 'px';
-        glowCtx.setTransform(dprGlow, 0, 0, dprGlow, 0, 0);
-        glowCtx.lineCap = 'round';
-        glowCtx.lineJoin = 'round';
-
-        // fillR reaches past the farthest corner so strands cover the
-        // whole rectangle, not just an inscribed circle. coreBase stays
-        // tied to the shorter side so the center glow looks proportionate.
-        cornerR = Math.hypot(width, height) * 0.5 * 1.1;
-        fillR = cornerR;
-        coreBase = Math.min(width, height) * 0.5;
-
-        const cx = width / 2, cy = height / 2;
-        bgGradient = crispCtx.createRadialGradient(cx, cy, 0, cx, cy, fillR);
-        bgGradient.addColorStop(0, '#141a35');
-        bgGradient.addColorStop(0.55, '#0a0f24');
-        bgGradient.addColorStop(1, '#04060f');
-
-        coreGradient = crispCtx.createRadialGradient(0, 0, 0, 0, 0, coreBase * 0.42);
-        coreGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-        coreGradient.addColorStop(0.35, 'rgba(205, 222, 255, 0.55)');
-        coreGradient.addColorStop(1, 'rgba(205, 222, 255, 0)');
-
-        buildStrandPaths();
-      }
-
-      // Spiral strands: each sweeps from beyond the rectangle's edge
-      // inward toward the core at a slightly different pace/color, so
-      // the set reads as one coherent vortex filling the whole window
-      // rather than a color wheel. Evenly spaced base angles (with a
-      // little jitter) keep gaps between strands from opening up.
-      const PALETTE = ['#4cc9f0', '#4361ee', '#3a86ff', '#7209b7', '#8338ec', '#b5179e'];
-      const STRAND_COUNT = 104;
-      const STEPS = 20;
-      const strands = Array.from({ length: STRAND_COUNT }, (_, i) => {
-        const step = (Math.PI * 2) / STRAND_COUNT;
-        return {
-          angle0: i * step + (Math.random() - 0.5) * step * 0.85,
-          twist: (Math.random() * 0.9 + 1.35) * Math.PI,
-          innerFrac: Math.random() * 0.16 + 0.06,
-          outerFrac: Math.random() * 0.12 + 0.88,
-          width: Math.random() * 1.8 + 1.2,
-          color: PALETTE[(Math.random() * PALETTE.length) | 0],
-          alpha: Math.random() * 0.3 + 0.55,
-          path: null
-        };
-      });
-
-      // Each strand's curve only depends on the box size (via fillR /
-      // coreBase), not on time, so its geometry is built once (and
-      // rebuilt on resize) into a Path2D instead of being recomputed
-      // point-by-point every animation frame. The shared rotation +
-      // wobble applied at draw time reproduces the exact same motion
-      // as before via a single canvas transform, which the GPU handles
-      // for free instead of hundreds of per-point trig calls per frame.
-      function buildStrandPaths() {
-        strands.forEach((s) => {
-          const outerR = s.outerFrac * fillR;
-          const innerR = s.innerFrac * coreBase;
-          const path = new Path2D();
-          for (let i = 0; i <= STEPS; i++) {
-            const t = i / STEPS;
-            const e = Math.pow(t, 0.85);
-            const r = outerR + (innerR - outerR) * e;
-            const ang = s.angle0 + t * s.twist;
-            const x = Math.cos(ang) * r;
-            const y = Math.sin(ang) * r;
-            if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
-          }
-          s.path = path;
-        });
-      }
-
-      const HOLD_MS = 950;
-      const OPEN_MS = 1350;
-      const TOTAL_MS = HOLD_MS + OPEN_MS;
-      const CHROMA_OFF_MS = HOLD_MS;
-      const ROTATION_MS = 8000;
-
-      function easeInOutCubic(t) {
-        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      }
-
-      function punchReveal(ctx, cx, cy, revealR) {
-        if (revealR <= 0) return;
-        const hole = ctx.createRadialGradient(
-          cx, cy, Math.max(0, revealR - 26),
-          cx, cy, revealR
-        );
-        hole.addColorStop(0, 'rgba(0, 0, 0, 1)');
-        hole.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.fillStyle = hole;
-        ctx.beginPath();
-        ctx.arc(cx, cy, revealR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalCompositeOperation = 'source-over';
-      }
-
-      const startTime = performance.now();
-
-      function draw(now) {
-        const elapsed = now - startTime;
-        const cx = width / 2, cy = height / 2;
-
-        let revealT = 0;
-        if (elapsed > HOLD_MS) {
-          revealT = easeInOutCubic(Math.min(1, (elapsed - HOLD_MS) / OPEN_MS));
-        }
-        const revealR = revealT * cornerR;
-
-        // A single shared rotation (with a gentle overall breathing
-        // wobble) stands in for the old per-strand wobble — one canvas
-        // transform instead of a per-strand sine call every frame.
-        const rotation = (elapsed / ROTATION_MS) * Math.PI * 2 + Math.sin(elapsed * 0.0006) * 0.015;
-
-        // ---- crisp base layer: backdrop, bright thin lines, core ----
-        crispCtx.clearRect(0, 0, width, height);
-        crispCtx.fillStyle = bgGradient;
-        crispCtx.fillRect(0, 0, width, height);
-
-        crispCtx.save();
-        crispCtx.translate(cx, cy);
-        crispCtx.rotate(rotation);
-        crispCtx.globalCompositeOperation = 'lighter';
-        strands.forEach((s) => {
-          crispCtx.strokeStyle = s.color;
-          crispCtx.globalAlpha = s.alpha;
-          crispCtx.lineWidth = s.width;
-          crispCtx.stroke(s.path);
-        });
-        crispCtx.restore();
-
-        crispCtx.globalAlpha = 1;
-        crispCtx.globalCompositeOperation = 'source-over';
-        crispCtx.fillStyle = coreGradient;
-        crispCtx.beginPath();
-        crispCtx.arc(cx, cy, coreBase * 0.42, 0, Math.PI * 2);
-        crispCtx.fill();
-
-        punchReveal(crispCtx, cx, cy, revealR);
-
-        // ---- glow layer: soft wide strokes, blurred via CSS ----
-        glowCtx.clearRect(0, 0, width, height);
-        glowCtx.save();
-        glowCtx.translate(cx, cy);
-        glowCtx.rotate(rotation);
-        glowCtx.globalCompositeOperation = 'lighter';
-        strands.forEach((s) => {
-          glowCtx.strokeStyle = s.color;
-          glowCtx.globalAlpha = s.alpha * 0.4;
-          glowCtx.lineWidth = s.width * 3;
-          glowCtx.stroke(s.path);
-        });
-        glowCtx.restore();
-        glowCtx.globalAlpha = 1;
-        glowCtx.globalCompositeOperation = 'source-over';
-
-        punchReveal(glowCtx, cx, cy, revealR);
-
-        if (elapsed >= CHROMA_OFF_MS) {
-          portalShell.classList.remove('chroma');
-        }
-
-        if (elapsed < TOTAL_MS) {
-          rafId = requestAnimationFrame(draw);
-        }
-      }
-
-      resize();
-      window.addEventListener('resize', resize);
-      rafId = requestAnimationFrame(draw);
-
-      introEl.addEventListener('animationend', (e) => {
-        if (e.target === introEl) cleanup();
-      });
-
-      setTimeout(() => portalShell.classList.remove('chroma'), CHROMA_OFF_MS);
-      setTimeout(cleanup, PORTAL_INTRO_VISIBLE_MS + 80);
-    })();
-
     (function initPortalGuide() {
       const guide = document.getElementById('portalGuide');
       const hint = document.getElementById('guideHint');
       if (!guide) return;
 
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      // Wait for the portal intro swirl to fully fade out, then add a
-      // 1.5s buffer before the guide appears. Reduced-motion users never
-      // see the swirl, so they keep the original short load delay.
-      const loadDelayMs = reduce ? 2000 : PORTAL_INTRO_VISIBLE_MS + 1500;
+      const loadDelayMs = 2000;
       const fadeInMs = reduce ? 200 : 850;
       const playMs = reduce ? 800 : 4200;
       const holdMs = 2000;
@@ -2549,11 +2065,16 @@
         while (timers.length) window.clearTimeout(timers.pop());
       }
 
-      function hideHint() {}
+      function hideHint() {
+        if (!hint) return;
+        hint.classList.remove('is-on');
+        hint.setAttribute('aria-hidden', 'true');
+      }
 
       function showHint() {
         if (!hint) return;
-        hint.removeAttribute('aria-hidden');
+        hint.classList.add('is-on');
+        hint.setAttribute('aria-hidden', 'false');
       }
 
       function startPinBounce() {
@@ -2575,6 +2096,7 @@
 
       function playGuide() {
         clearGuideTimers();
+        hideHint();
         guide.classList.remove('is-on', 'is-out', 'is-play');
         void guide.offsetWidth;
         guide.classList.add('is-ready', 'is-on');
@@ -3905,24 +3427,6 @@
       });
 
       applyToggle();
-    })();
-
-    (function initChromePress() {
-      const PRESS_MS = 160;
-      document.querySelectorAll('.guide-hint, .toggle-btn').forEach((btn) => {
-        let timer = 0;
-        const release = () => {
-          window.clearTimeout(timer);
-          timer = window.setTimeout(() => btn.classList.remove('is-pressed'), PRESS_MS);
-        };
-        btn.addEventListener('pointerdown', () => {
-          btn.classList.add('is-pressed');
-          window.clearTimeout(timer);
-        });
-        btn.addEventListener('pointerup', release);
-        btn.addEventListener('pointercancel', release);
-        btn.addEventListener('pointerleave', release);
-      });
     })();
   </script>
 </body>
