@@ -1426,41 +1426,119 @@
       }
     }
 
-    .toggle-btn {
+    .chrome-btns {
+      --hint-tint: #7dd3fc;
       position: fixed;
       top: 20px;
       right: 16px;
       z-index: 30;
-      background: transparent;
-      border: none;
-      width: 36px;
-      height: 36px;
-      cursor: pointer;
-      padding: 4px;
-      border-radius: 50%;
-      transition: transform 0.3s;
-      flex-shrink: 0;
-      color: #ffffff;
-      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .chrome-btns > button {
       pointer-events: auto;
+    }
+
+    body.portal-life .chrome-btns { --hint-tint: #7dd3fc; }
+    body.portal-build .chrome-btns { --hint-tint: #00ff9d; }
+    body.portal-work .chrome-btns { --hint-tint: #9c88ff; }
+    body.portal-commerce .chrome-btns { --hint-tint: #fb923c; }
+    body.portal-dark .chrome-btns { --hint-tint: #d4d4d8; }
+
+    .toggle-btn {
+      position: relative;
+      z-index: 1;
+      background: color-mix(in srgb, var(--hint-tint) 16%, rgba(8, 12, 20, 0.42));
+      border: none;
+      width: 32px;
+      height: 32px;
+      cursor: pointer;
+      padding: 0;
+      border-radius: 50%;
+      transition: transform 0.3s, opacity 0.2s ease;
+      flex-shrink: 0;
+      color: color-mix(in srgb, var(--hint-tint) 22%, #ffffff);
+      overflow: visible;
+      isolation: isolate;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 0;
     }
 
     .toggle-btn:hover {
       transform: rotate(20deg);
+      opacity: 0.62;
+    }
+
+    .toggle-btn:active {
+      opacity: 0.42;
+    }
+
+    .toggle-btn::before,
+    .toggle-btn::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .toggle-btn::before {
+      inset: 0;
+      padding: 2px;
+      background: conic-gradient(
+        from var(--portal-spin),
+        rgba(255, 255, 255, 0.4) 0deg,
+        rgba(255, 255, 255, 0.12) 40deg,
+        rgba(255, 255, 255, 0.06) 120deg,
+        rgba(255, 255, 255, 0.06) 240deg,
+        rgba(255, 255, 255, 0.12) 320deg,
+        rgba(255, 255, 255, 0.4) 360deg
+      );
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      animation: portalSpin 5.5s linear infinite;
+      filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+    }
+
+    .toggle-btn::after {
+      inset: 2px;
+      border: 0;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hint-tint) 28%, rgba(255, 255, 255, 0.72));
+      z-index: 1;
     }
 
     .toggle-btn svg {
-      width: 28px;
-      height: 28px;
+      position: relative;
+      z-index: 1;
+      width: 16px;
+      height: 16px;
       display: block;
       transition: opacity 0.25s ease;
     }
 
     @media (max-width: 768px) {
+      .chrome-btns {
+        position: relative;
+        top: auto;
+        right: auto;
+        z-index: 4;
+        justify-content: center;
+        width: 100%;
+        margin: 8px 0 0;
+      }
+
       .toggle-btn {
-        top: calc(36px + env(safe-area-inset-top, 0px));
-        right: calc(10px + env(safe-area-inset-right, 0px));
-        z-index: 1000;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
       }
@@ -1580,18 +1658,17 @@
     }
 
     .guide-hint {
-      --hint-tint: #7dd3fc;
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      z-index: 12;
+      position: relative;
+      top: auto;
+      right: auto;
+      z-index: 1;
       width: 32px;
       height: 32px;
       padding: 0;
       color: color-mix(in srgb, var(--hint-tint) 22%, #ffffff);
-      opacity: 0;
-      pointer-events: none;
-      background: transparent;
+      opacity: 0.92;
+      pointer-events: auto;
+      background: color-mix(in srgb, var(--hint-tint) 16%, rgba(8, 12, 20, 0.42));
       border: none;
       border-radius: 50%;
       cursor: pointer;
@@ -1601,6 +1678,7 @@
       line-height: 0;
       filter: none;
       isolation: isolate;
+      flex-shrink: 0;
       transition: opacity 0.7s ease, color 0.45s ease;
     }
 
@@ -1614,24 +1692,32 @@
 
     .guide-hint::before {
       inset: 0;
+      padding: 2px;
       background: conic-gradient(
         from var(--portal-spin),
-        rgba(255, 255, 255, 0.95) 0deg,
-        rgba(255, 255, 255, 0.55) 40deg,
-        rgba(255, 255, 255, 0.38) 120deg,
-        rgba(255, 255, 255, 0.38) 240deg,
-        rgba(255, 255, 255, 0.55) 320deg,
-        rgba(255, 255, 255, 0.95) 360deg
+        rgba(255, 255, 255, 0.4) 0deg,
+        rgba(255, 255, 255, 0.12) 40deg,
+        rgba(255, 255, 255, 0.06) 120deg,
+        rgba(255, 255, 255, 0.06) 240deg,
+        rgba(255, 255, 255, 0.12) 320deg,
+        rgba(255, 255, 255, 0.4) 360deg
       );
-      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
-      mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
       animation: portalSpin 5.5s linear infinite;
-      filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+      filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.4));
     }
 
     .guide-hint::after {
       inset: 2px;
-      border: 1px solid color-mix(in srgb, var(--hint-tint) 28%, rgba(255, 255, 255, 0.72));
+      border: 0;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hint-tint) 28%, rgba(255, 255, 255, 0.72));
       z-index: 1;
     }
 
@@ -1644,34 +1730,17 @@
       overflow: visible;
     }
 
-    body.portal-life .guide-hint { --hint-tint: #7dd3fc; }
-    body.portal-build .guide-hint { --hint-tint: #00ff9d; }
-    body.portal-work .guide-hint { --hint-tint: #9c88ff; }
-    body.portal-commerce .guide-hint { --hint-tint: #fb923c; }
-    body.portal-dark .guide-hint { --hint-tint: #d4d4d8; }
-
-    .guide-hint.is-on {
-      opacity: 0.92;
-      pointer-events: auto;
-    }
-
-    .guide-hint.is-on:hover {
+    .guide-hint:hover {
       opacity: 0.62;
     }
 
-    .guide-hint.is-on:active {
+    .guide-hint:active {
       opacity: 0.42;
     }
 
-    @media (max-width: 768px) {
-      .guide-hint {
-        top: 12px;
-        right: 12px;
-      }
-    }
-
     @media (prefers-reduced-motion: reduce) {
-      .guide-hint::before {
+      .guide-hint::before,
+      .toggle-btn::before {
         animation: none;
       }
     }
@@ -1874,10 +1943,6 @@
   </div>
 
 
-  <button class="toggle-btn" id="theme-toggle" type="button" aria-label="Dark mode">
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 14.35A9 9 0 1 1 9.65 3 7.15 7.15 0 0 0 21 14.35z"/></svg>
-  </button>
-
   <div class="header">
     <h1 class="name">
       <a href="https://briancrink.com" class="name-link">Brian Crink</a>
@@ -1910,6 +1975,17 @@
         </span>
       </p>
     </h1>
+    <div class="chrome-btns">
+      <button class="guide-hint" id="guideHint" type="button" aria-label="Show portal guide">
+        <svg viewBox="0 0 36 36" aria-hidden="true">
+          <circle cx="18" cy="11.2" r="1.72" fill="currentColor" fill-opacity="0.82"/>
+          <rect x="16.7" y="15.2" width="2.6" height="11.4" rx="1.3" fill="currentColor" fill-opacity="0.82"/>
+        </svg>
+      </button>
+      <button class="toggle-btn" id="theme-toggle" type="button" aria-label="Dark mode">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 14.35A9 9 0 1 1 9.65 3 7.15 7.15 0 0 0 21 14.35z"/></svg>
+      </button>
+    </div>
   </div>
 
   <div class="portal-stage" id="stage">
@@ -1920,14 +1996,6 @@
       <div class="portal-bloom-chroma" aria-hidden="true"></div>
       <div class="portal-rim" aria-hidden="true"></div>
       <div class="portal-rim-chroma" aria-hidden="true"></div>
-
-      <button class="guide-hint" id="guideHint" type="button" aria-label="Show portal guide" aria-hidden="true">
-        <svg viewBox="0 0 36 36" aria-hidden="true">
-          <circle cx="18" cy="18" r="14" fill="currentColor" fill-opacity="0.16"/>
-          <circle cx="18" cy="11.2" r="1.72" fill="currentColor" fill-opacity="0.58"/>
-          <rect x="16.7" y="15.2" width="2.6" height="11.4" rx="1.3" fill="currentColor" fill-opacity="0.58"/>
-        </svg>
-      </button>
 
       <div class="portal life-active" id="portal">
 
@@ -2436,16 +2504,11 @@
         while (timers.length) window.clearTimeout(timers.pop());
       }
 
-      function hideHint() {
-        if (!hint) return;
-        hint.classList.remove('is-on');
-        hint.setAttribute('aria-hidden', 'true');
-      }
+      function hideHint() {}
 
       function showHint() {
         if (!hint) return;
-        hint.classList.add('is-on');
-        hint.setAttribute('aria-hidden', 'false');
+        hint.removeAttribute('aria-hidden');
       }
 
       function startPinBounce() {
@@ -2467,7 +2530,6 @@
 
       function playGuide() {
         clearGuideTimers();
-        hideHint();
         guide.classList.remove('is-on', 'is-out', 'is-play');
         void guide.offsetWidth;
         guide.classList.add('is-ready', 'is-on');
