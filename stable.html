@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#020617" id="themeColor">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="icon" href="resources/images/icons/favicon.png" type="image/png" media="(prefers-color-scheme: light)">
   <link rel="icon" href="resources/images/icons/favicon-white.png" type="image/png" media="(prefers-color-scheme: dark)">
@@ -293,8 +291,8 @@
       align-items: center;
       justify-content: flex-start;
       width: 100%;
-      height: var(--app-vh, 100dvh);
-      min-height: var(--app-vh, 100dvh);
+      height: 100dvh;
+      min-height: 100dvh;
       padding: 0 16px 28px;
       overflow: hidden;
       overscroll-behavior: none;
@@ -428,8 +426,8 @@
       right: 0;
       bottom: auto;
       width: 100%;
-      height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
-      min-height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
+      height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
+      min-height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
       z-index: 0;
       pointer-events: none;
       transition: background 0.55s ease;
@@ -467,8 +465,8 @@
         left: 0;
         right: 0;
         bottom: auto;
-        height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
-        min-height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
+        height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
+        min-height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
       }
 
       .scene-ground {
@@ -2036,8 +2034,8 @@
       left: 0;
       right: 0;
       bottom: auto;
-      height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
-      min-height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
+      height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
+      min-height: calc(100lvh + env(safe-area-inset-bottom, 0px) + 96px);
       z-index: 0;
       pointer-events: none;
       background: #000000;
@@ -2063,45 +2061,6 @@
       document.documentElement.style.background = theme[name];
       var meta = document.getElementById('themeColor');
       if (meta) meta.setAttribute('content', theme[name]);
-    })();
-
-    // --- Standalone-mode viewport-height fix -------------------------
-    // On iOS, when this page runs as a home-screen ("Add to Home
-    // Screen") web app, 100dvh/100lvh are measured correctly on a
-    // fresh cold launch, but a long-standing WebKit bug leaves them
-    // stuck reporting a stale (short) value after an in-app reload or
-    // same-origin navigation (e.g. tapping the "Brian Crink" or
-    // "Portal" links, which link back to this same page) — leaving a
-    // gap at the bottom where the ambient background shows through.
-    // Measuring the real viewport with JS and exposing it as a CSS
-    // custom property sidesteps that bug: .app-lock/.ambient/.theme-veil
-    // below use var(--app-vh, 100dvh/100lvh) so they use this precise,
-    // freshly-measured value when available and fall back to the CSS
-    // unit otherwise (e.g. before this script runs, or with JS off).
-    (function () {
-      var root = document.documentElement;
-      function setAppVH() {
-        var vh = window.innerHeight
-          || (window.visualViewport && window.visualViewport.height)
-          || root.clientHeight;
-        if (vh) root.style.setProperty('--app-vh', vh + 'px');
-      }
-      setAppVH();
-      window.addEventListener('resize', setAppVH);
-      window.addEventListener('orientationchange', setAppVH);
-      window.addEventListener('pageshow', setAppVH);
-      document.addEventListener('visibilitychange', function () {
-        if (!document.hidden) setAppVH();
-      });
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', setAppVH);
-      }
-      // WebKit's stale value can take a moment to correct itself after
-      // the triggering events above, so re-check a few times while its
-      // internal layout settles rather than relying on a single read.
-      [50, 150, 300, 600, 1000].forEach(function (ms) {
-        window.setTimeout(setAppVH, ms);
-      });
     })();
   </script>
   <div class="ambient" aria-hidden="true"></div>
@@ -2455,20 +2414,8 @@
       // letting the compositor scale it up) cuts its fill cost sharply.
       const dprCrisp = Math.min(window.devicePixelRatio || 1, 1.5);
       const dprGlow = Math.min(window.devicePixelRatio || 1, 1);
-      // Extra downsample on top of dprGlow: the blur filter hides the
-      // softness this introduces, but the canvas has a quarter of the
-      // pixels to fill and blur every frame.
-      const GLOW_SCALE = 0.6;
       let width = 0, height = 0, fillR = 0, coreBase = 0, cornerR = 0;
-      // Both the dark vignette and the core glow are static (neither
-      // changes shape or position over time — only the strands rotate
-      // and the reveal hole grows), so each is pre-rendered once into
-      // an offscreen bitmap here and just blitted every frame below.
-      // A drawImage blit is far cheaper than re-evaluating a full
-      // radial-gradient fill on every animation frame.
-      let bgBitmap = null;
-      let coreBitmap = null;
-      let coreDiameter = 0;
+      let bgGradient = null, coreGradient = null;
 
       function resize() {
         const rect = introEl.getBoundingClientRect();
@@ -2483,12 +2430,11 @@
         crispCtx.lineCap = 'round';
         crispCtx.lineJoin = 'round';
 
-        const glowPixelScale = dprGlow * GLOW_SCALE;
-        glowCanvas.width = Math.round(width * glowPixelScale);
-        glowCanvas.height = Math.round(height * glowPixelScale);
+        glowCanvas.width = Math.round(width * dprGlow);
+        glowCanvas.height = Math.round(height * dprGlow);
         glowCanvas.style.width = width + 'px';
         glowCanvas.style.height = height + 'px';
-        glowCtx.setTransform(glowPixelScale, 0, 0, glowPixelScale, 0, 0);
+        glowCtx.setTransform(dprGlow, 0, 0, dprGlow, 0, 0);
         glowCtx.lineCap = 'round';
         glowCtx.lineJoin = 'round';
 
@@ -2500,34 +2446,15 @@
         coreBase = Math.min(width, height) * 0.5;
 
         const cx = width / 2, cy = height / 2;
-
-        bgBitmap = document.createElement('canvas');
-        bgBitmap.width = crispCanvas.width;
-        bgBitmap.height = crispCanvas.height;
-        const bgCtx = bgBitmap.getContext('2d');
-        bgCtx.setTransform(dprCrisp, 0, 0, dprCrisp, 0, 0);
-        const bgGradient = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, fillR);
+        bgGradient = crispCtx.createRadialGradient(cx, cy, 0, cx, cy, fillR);
         bgGradient.addColorStop(0, '#141a35');
         bgGradient.addColorStop(0.55, '#0a0f24');
         bgGradient.addColorStop(1, '#04060f');
-        bgCtx.fillStyle = bgGradient;
-        bgCtx.fillRect(0, 0, width, height);
 
-        const coreR = coreBase * 0.42;
-        coreDiameter = coreR * 2;
-        coreBitmap = document.createElement('canvas');
-        coreBitmap.width = Math.max(2, Math.round(coreDiameter * dprCrisp));
-        coreBitmap.height = coreBitmap.width;
-        const coreCtx = coreBitmap.getContext('2d');
-        coreCtx.setTransform(dprCrisp, 0, 0, dprCrisp, 0, 0);
-        const coreGradient = coreCtx.createRadialGradient(coreR, coreR, 0, coreR, coreR, coreR);
+        coreGradient = crispCtx.createRadialGradient(0, 0, 0, 0, 0, coreBase * 0.42);
         coreGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
         coreGradient.addColorStop(0.35, 'rgba(205, 222, 255, 0.55)');
         coreGradient.addColorStop(1, 'rgba(205, 222, 255, 0)');
-        coreCtx.fillStyle = coreGradient;
-        coreCtx.beginPath();
-        coreCtx.arc(coreR, coreR, coreR, 0, Math.PI * 2);
-        coreCtx.fill();
 
         buildStrandPaths();
       }
@@ -2606,8 +2533,6 @@
       }
 
       const startTime = performance.now();
-      let chromaOff = false;
-      let glowFrameToggle = false;
 
       function draw(now) {
         const elapsed = now - startTime;
@@ -2626,7 +2551,8 @@
 
         // ---- crisp base layer: backdrop, bright thin lines, core ----
         crispCtx.clearRect(0, 0, width, height);
-        crispCtx.drawImage(bgBitmap, 0, 0, width, height);
+        crispCtx.fillStyle = bgGradient;
+        crispCtx.fillRect(0, 0, width, height);
 
         crispCtx.save();
         crispCtx.translate(cx, cy);
@@ -2642,36 +2568,32 @@
 
         crispCtx.globalAlpha = 1;
         crispCtx.globalCompositeOperation = 'source-over';
-        crispCtx.drawImage(coreBitmap, cx - coreDiameter / 2, cy - coreDiameter / 2, coreDiameter, coreDiameter);
+        crispCtx.fillStyle = coreGradient;
+        crispCtx.beginPath();
+        crispCtx.arc(cx, cy, coreBase * 0.42, 0, Math.PI * 2);
+        crispCtx.fill();
 
         punchReveal(crispCtx, cx, cy, revealR);
 
         // ---- glow layer: soft wide strokes, blurred via CSS ----
-        // The blur hides small temporal gaps, so this layer only
-        // repaints every other frame — same look, half the cost of
-        // the (comparatively expensive) full-canvas blur + strokes.
-        glowFrameToggle = !glowFrameToggle;
-        if (glowFrameToggle) {
-          glowCtx.clearRect(0, 0, width, height);
-          glowCtx.save();
-          glowCtx.translate(cx, cy);
-          glowCtx.rotate(rotation);
-          glowCtx.globalCompositeOperation = 'lighter';
-          strands.forEach((s) => {
-            glowCtx.strokeStyle = s.color;
-            glowCtx.globalAlpha = s.alpha * 0.4;
-            glowCtx.lineWidth = s.width * 3;
-            glowCtx.stroke(s.path);
-          });
-          glowCtx.restore();
-          glowCtx.globalAlpha = 1;
-          glowCtx.globalCompositeOperation = 'source-over';
+        glowCtx.clearRect(0, 0, width, height);
+        glowCtx.save();
+        glowCtx.translate(cx, cy);
+        glowCtx.rotate(rotation);
+        glowCtx.globalCompositeOperation = 'lighter';
+        strands.forEach((s) => {
+          glowCtx.strokeStyle = s.color;
+          glowCtx.globalAlpha = s.alpha * 0.4;
+          glowCtx.lineWidth = s.width * 3;
+          glowCtx.stroke(s.path);
+        });
+        glowCtx.restore();
+        glowCtx.globalAlpha = 1;
+        glowCtx.globalCompositeOperation = 'source-over';
 
-          punchReveal(glowCtx, cx, cy, revealR);
-        }
+        punchReveal(glowCtx, cx, cy, revealR);
 
-        if (!chromaOff && elapsed >= CHROMA_OFF_MS) {
-          chromaOff = true;
+        if (elapsed >= CHROMA_OFF_MS) {
           portalShell.classList.remove('chroma');
         }
 
