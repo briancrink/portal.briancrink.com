@@ -293,10 +293,9 @@
       align-items: center;
       justify-content: flex-start;
       width: 100%;
-      height: var(--app-vh, 100dvh);
       min-height: var(--app-vh, 100dvh);
       padding: 0 16px 28px;
-      overflow: hidden;
+      overflow: visible;
       overscroll-behavior: none;
     }
 
@@ -423,13 +422,7 @@
 
     .ambient {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: auto;
-      width: 100%;
-      height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
-      min-height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
+      inset: 0;
       z-index: 0;
       pointer-events: none;
       transition: background 0.55s ease;
@@ -459,16 +452,6 @@
     @media (max-width: 768px) {
       html {
         transition: none;
-      }
-
-      .ambient,
-      .theme-veil {
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: auto;
-        height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
-        min-height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
       }
 
       .scene-ground {
@@ -2032,12 +2015,7 @@
 
     .theme-veil {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: auto;
-      height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
-      min-height: calc(var(--app-vh, 100lvh) + env(safe-area-inset-bottom, 0px) + 96px);
+      inset: 0;
       z-index: 0;
       pointer-events: none;
       background: #000000;
