@@ -455,96 +455,31 @@
       }
 
       .scene-ground {
-        height: min(36vh, 300px);
+        height: max(200px, min(32vh, 260px));
       }
 
-      body.portal-life,
-      body.portal-build,
-      body.portal-work,
-      body.portal-commerce {
-        --ground-wash-opacity: 1;
-        --ground-reflect-opacity: 1;
-        --ground-line-opacity: 1;
-      }
-
-      .scene-ground-plane {
-        background: linear-gradient(
-          to bottom,
-          transparent 0%,
-          rgba(0, 0, 0, 0.03) 45%,
-          rgba(0, 0, 0, 0.14) 100%
-        );
-      }
-
-      .scene-ground-wash {
-        background: linear-gradient(
-          to bottom,
-          color-mix(in srgb, var(--ground-soft) 0%, transparent) 0%,
-          color-mix(in srgb, var(--ground-soft) 46%, transparent) 38%,
-          color-mix(in srgb, var(--ground-hot) 32%, transparent) 100%
-        );
-        filter: saturate(1.45) brightness(1.28);
+      .scene-ground-reflect,
+      .scene-ground-chroma-reflect {
+        width: max(140%, 560px);
+        height: max(70%, 168px);
       }
 
       .scene-ground-reflect {
         background: radial-gradient(
-          ellipse 52% 68% at 50% 100%,
-          color-mix(in srgb, var(--ground-hot) 92%, transparent) 0%,
-          color-mix(in srgb, var(--ground-soft) 52%, transparent) 36%,
-          transparent 74%
+          ellipse 72% 60% at 50% 100%,
+          color-mix(in srgb, var(--ground-hot) 55%, transparent) 0%,
+          color-mix(in srgb, var(--ground-soft) 22%, transparent) 40%,
+          transparent 72%
         );
-        filter: blur(20px) saturate(1.5) brightness(1.32);
       }
 
       .scene-ground-line {
         background: radial-gradient(
-          ellipse 62% 92% at 50% 50%,
-          color-mix(in srgb, var(--ground-core) 78%, transparent) 0%,
-          color-mix(in srgb, var(--ground-hot) 46%, transparent) 38%,
-          transparent 76%
+          ellipse 80% 80% at 50% 50%,
+          color-mix(in srgb, var(--ground-core) 35%, transparent) 0%,
+          color-mix(in srgb, var(--ground-hot) 18%, transparent) 40%,
+          transparent 75%
         );
-        filter: blur(11px) saturate(1.4) brightness(1.25);
-      }
-
-      body.portal-life .ambient {
-        background:
-          radial-gradient(
-            ellipse 140% 170% at 50% 48%,
-            rgba(14, 164, 233, 0.85) 0%,
-            rgba(14, 164, 233, 0.38) 62%,
-            #020617 100%
-          ),
-          #020617;
-      }
-      body.portal-build .ambient {
-        background:
-          radial-gradient(
-            ellipse 140% 170% at 50% 48%,
-            rgba(22, 163, 74, 0.85) 0%,
-            rgba(22, 163, 74, 0.38) 62%,
-            #03140a 100%
-          ),
-          #03140a;
-      }
-      body.portal-work .ambient {
-        background:
-          radial-gradient(
-            ellipse 140% 170% at 50% 48%,
-            rgba(120, 32, 244, 0.811) 0%,
-            rgba(76, 22, 153, 0.35) 62%,
-            rgb(6, 2, 13) 100%
-          ),
-          rgb(6, 2, 13);
-      }
-      body.portal-commerce .ambient {
-        background:
-          radial-gradient(
-            ellipse 140% 170% at 50% 48%,
-            rgba(255, 89, 0, 0.85) 0%,
-            rgba(255, 89, 0, 0.42) 62%,
-            #321200 100%
-          ),
-          #321200;
       }
     }
 
@@ -640,7 +575,7 @@
 
     @media (max-width: 768px) {
       .header {
-        padding-top: 90px;
+        padding-top: 44px;
       }
     }
 
@@ -659,6 +594,10 @@
       color: #ffffff;
       margin: 0 0 12px 0;
       letter-spacing: -0.5px;
+    }
+
+    .name-lock {
+      display: contents;
     }
 
     .name-link {
@@ -1589,33 +1528,24 @@
     }
 
     @media (max-width: 768px) {
-      .map-link {
+      .sub-header {
         position: relative;
-        left: auto;
-        top: auto;
-        margin-left: 0;
-        transform: none;
+        width: 100%;
       }
 
-      .sub-header-link {
-        position: absolute;
-        right: 100%;
-        top: 50%;
-        transform: translateY(-50%);
-        margin-right: 10px;
-        white-space: nowrap;
+      .sub-header-cluster {
+        position: relative;
+        display: block;
+        width: 100%;
+        min-height: 2.8rem;
       }
 
+      .map-link,
+      .sub-header-link,
       .chrome-btns {
         position: absolute;
         top: 50%;
-        left: 100%;
-        right: auto;
         transform: translateY(-50%);
-        z-index: 4;
-        justify-content: flex-start;
-        width: auto;
-        margin: 0 0 0 10px;
       }
 
       .toggle-btn,
@@ -2119,6 +2049,7 @@
   <div class="app-lock">
   <div class="header">
     <h1 class="name">
+      <span class="name-lock">
       <a href="https://briancrink.com" class="name-link">Brian Crink</a>
       <p class="sub-header">
         <span class="sub-header-cluster">
@@ -2159,6 +2090,7 @@
             </svg></a>
         </span>
       </p>
+      </span>
     </h1>
   </div>
 
@@ -4047,6 +3979,60 @@
       draw();
     })();
 
+
+    (function layoutMobileHeader() {
+      const name = document.querySelector('.name-link');
+      const sub = document.querySelector('.sub-header');
+      const portal = document.querySelector('.sub-header-link');
+      const map = document.querySelector('.map-link');
+      const chrome = document.querySelector('.chrome-btns');
+      const info = document.querySelector('.guide-hint');
+      const theme = document.getElementById('theme-toggle');
+      const nodes = [portal, map, chrome];
+
+      function clear() {
+        nodes.forEach((el) => {
+          if (!el) return;
+          el.style.left = '';
+          el.style.right = '';
+          el.style.top = '';
+          el.style.width = '';
+          el.style.gap = '';
+          el.style.display = '';
+          el.style.justifyContent = '';
+        });
+      }
+
+      function sync() {
+        if (window.innerWidth > 768) {
+          clear();
+          return;
+        }
+        if (!name || !sub || !portal || !map || !chrome || !info || !theme) return;
+        const nameBox = name.getBoundingClientRect();
+        const subBox = sub.getBoundingClientRect();
+        const mapW = map.getBoundingClientRect().width || 45;
+        const infoW = info.getBoundingClientRect().width || 32;
+        const themeW = theme.getBoundingClientRect().width || 32;
+        const nameCenter = (nameBox.left + nameBox.right) / 2;
+        portal.style.left = Math.max(0, nameBox.left - subBox.left) + 'px';
+        map.style.left = (nameCenter - mapW / 2 - subBox.left) + 'px';
+        const mapRight = nameCenter + mapW / 2;
+        const gap = Math.max(8, (nameBox.right - mapRight - infoW - themeW) / 2);
+        chrome.style.left = (mapRight + gap - subBox.left) + 'px';
+        chrome.style.right = 'auto';
+        chrome.style.display = 'flex';
+        chrome.style.justifyContent = 'flex-start';
+        chrome.style.gap = gap + 'px';
+        chrome.style.width = 'auto';
+      }
+
+      function tick() { requestAnimationFrame(sync); }
+      tick();
+      window.addEventListener('resize', tick);
+      window.addEventListener('load', tick);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(tick);
+    })();
 
     (function initThemeToggle() {
       const toggleBtn = document.getElementById('theme-toggle');
