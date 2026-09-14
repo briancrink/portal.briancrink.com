@@ -1589,16 +1589,33 @@
     }
 
     @media (max-width: 768px) {
+      .map-link {
+        position: relative;
+        left: auto;
+        top: auto;
+        margin-left: 0;
+        transform: none;
+      }
+
+      .sub-header-link {
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        margin-right: 10px;
+        white-space: nowrap;
+      }
+
       .chrome-btns {
         position: absolute;
         top: 50%;
-        right: 100%;
-        left: auto;
+        left: 100%;
+        right: auto;
         transform: translateY(-50%);
         z-index: 4;
-        justify-content: flex-end;
+        justify-content: flex-start;
         width: auto;
-        margin: 0 10px 0 0;
+        margin: 0 0 0 10px;
       }
 
       .toggle-btn,
