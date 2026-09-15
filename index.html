@@ -283,6 +283,7 @@
       --ground-wash-opacity: 0.85;
       --ground-reflect-opacity: 0.75;
       --ground-line-opacity: 0.55;
+      --ground-h: min(28vh, 240px);
     }
 
     .app-lock {
@@ -453,34 +454,6 @@
       html {
         transition: none;
       }
-
-      .scene-ground {
-        height: max(200px, min(32vh, 260px));
-      }
-
-      .scene-ground-reflect,
-      .scene-ground-chroma-reflect {
-        width: max(140%, 560px);
-        height: max(70%, 168px);
-      }
-
-      .scene-ground-reflect {
-        background: radial-gradient(
-          ellipse 72% 60% at 50% 100%,
-          color-mix(in srgb, var(--ground-hot) 55%, transparent) 0%,
-          color-mix(in srgb, var(--ground-soft) 22%, transparent) 40%,
-          transparent 72%
-        );
-      }
-
-      .scene-ground-line {
-        background: radial-gradient(
-          ellipse 80% 80% at 50% 50%,
-          color-mix(in srgb, var(--ground-core) 35%, transparent) 0%,
-          color-mix(in srgb, var(--ground-hot) 18%, transparent) 40%,
-          transparent 75%
-        );
-      }
     }
 
     .scene-ground {
@@ -488,7 +461,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      height: min(28vh, 240px);
+      height: var(--ground-h);
       z-index: 0;
       pointer-events: none;
       overflow: hidden;
@@ -557,6 +530,42 @@
       filter: blur(16px);
       opacity: var(--ground-line-opacity);
       transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
+    }
+
+    @media (max-width: 768px) {
+      .scene-ground {
+        height: var(--ground-h);
+      }
+
+      body {
+        --ground-h: max(200px, min(32vh, 260px));
+      }
+
+      .scene-ground-reflect,
+      .scene-ground-chroma-reflect {
+        width: calc(min(420px, 100vw - 32px) + 64px);
+        min-width: calc(min(420px, 100vw - 32px) + 64px);
+        height: 180px;
+        bottom: 10%;
+      }
+
+      .scene-ground-reflect {
+        background: radial-gradient(
+          ellipse 50% 55% at 50% 100%,
+          color-mix(in srgb, var(--ground-hot) 55%, transparent) 0%,
+          color-mix(in srgb, var(--ground-soft) 22%, transparent) 50%,
+          transparent 100%
+        );
+      }
+
+      .scene-ground-line {
+        background: radial-gradient(
+          ellipse 50% 80% at 50% 50%,
+          color-mix(in srgb, var(--ground-core) 35%, transparent) 0%,
+          color-mix(in srgb, var(--ground-hot) 18%, transparent) 45%,
+          transparent 100%
+        );
+      }
     }
 
     .header,
@@ -1309,9 +1318,19 @@
       gap: 14px;
       justify-content: center;
       align-items: flex-end;
-      padding: 16px 0 10px;
-      position: relative;
+      padding: 0;
+      margin: 0;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(var(--ground-h) * 0.24);
+      transform: none;
       z-index: 2;
+      pointer-events: none;
+    }
+
+    .nav-dots .nav-dot {
+      pointer-events: auto;
     }
 
     .nav-dot {
@@ -1332,7 +1351,7 @@
       transform: translateX(-50%);
       border-radius: 50%;
       pointer-events: none;
-      transition: background 0.25s ease;
+      transition: none;
       background: rgba(255, 255, 255, 0.2);
     }
 
@@ -1401,11 +1420,12 @@
       fill: rgba(255, 255, 255, 0.42);
       fill-rule: evenodd;
       opacity: 0;
-      transition: opacity 0.25s ease;
+      transition: none;
     }
 
     .nav-dot.active .nav-pin {
       opacity: 1;
+      transition: opacity 0.16s ease;
     }
 
     .nav-dot.active .nav-pin-wrap {
@@ -3979,6 +3999,20 @@
       draw();
     })();
 
+
+    (function syncPortalWidth() {
+      const portal = document.querySelector('.portal');
+      const root = document.documentElement;
+      if (!portal) return;
+      function sync() {
+        const w = Math.round(portal.getBoundingClientRect().width);
+        if (w) root.style.setProperty('--portal-w', w + 'px');
+      }
+      function tick() { requestAnimationFrame(sync); }
+      tick();
+      window.addEventListener('resize', tick);
+      window.addEventListener('load', tick);
+    })();
 
     (function layoutMobileHeader() {
       const name = document.querySelector('.name-link');
