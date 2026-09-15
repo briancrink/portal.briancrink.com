@@ -586,25 +586,6 @@
       .header {
         padding-top: 44px;
       }
-
-      .app-lock {
-        padding-bottom: calc(var(--ground-h) * 0.52 + env(safe-area-inset-bottom, 0px));
-      }
-
-      .portal-stage {
-        min-height: 0;
-        padding-bottom: 0;
-      }
-
-      .portal {
-        min-height: 0;
-        max-height: 100%;
-        flex: 1 1 auto;
-      }
-
-      .nav-dots {
-        bottom: calc(var(--ground-h) * 0.22 + env(safe-area-inset-bottom, 0px));
-      }
     }
 
     @media (min-width: 769px) {
@@ -685,6 +666,25 @@
       border: var(--portal-border) solid rgba(255, 255, 255, 0.14);
       box-shadow: none;
       transition: border-color 0.45s ease, filter 0.45s ease;
+    }
+
+    @media (max-width: 768px) {
+      .app-lock {
+        padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .portal-stage {
+        padding-bottom: 0;
+      }
+
+      .portal {
+        min-height: min(520px, calc(var(--app-vh, 100dvh) - 250px));
+        max-height: calc(var(--app-vh, 100dvh) - 230px);
+      }
+
+      .nav-dots {
+        bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+      }
     }
 
     .portal.life-active {
