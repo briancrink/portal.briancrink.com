@@ -670,20 +670,31 @@
 
     @media (max-width: 768px) {
       .app-lock {
-        padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
       }
 
       .portal-stage {
+        flex: 0 0 auto;
         padding-bottom: 0;
       }
 
       .portal {
-        min-height: min(520px, calc(var(--app-vh, 100dvh) - 250px));
-        max-height: calc(var(--app-vh, 100dvh) - 230px);
+        flex: none;
+        height: 520px;
+        min-height: 520px;
+        max-height: 520px;
       }
 
       .nav-dots {
-        bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+
+    @media (max-width: 768px) and (max-height: 820px) {
+      .portal {
+        height: 440px;
+        min-height: 440px;
+        max-height: 440px;
       }
     }
 
