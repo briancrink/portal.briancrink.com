@@ -532,6 +532,42 @@
       transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
     }
 
+    @media (max-width: 768px) {
+      .scene-ground {
+        height: var(--ground-h);
+      }
+
+      body {
+        --ground-h: max(200px, min(32vh, 260px));
+      }
+
+      .scene-ground-reflect,
+      .scene-ground-chroma-reflect {
+        width: calc(min(420px, 100vw - 32px) + 64px);
+        min-width: calc(min(420px, 100vw - 32px) + 64px);
+        height: 180px;
+        bottom: 10%;
+      }
+
+      .scene-ground-reflect {
+        background: radial-gradient(
+          ellipse 50% 55% at 50% 100%,
+          color-mix(in srgb, var(--ground-hot) 55%, transparent) 0%,
+          color-mix(in srgb, var(--ground-soft) 22%, transparent) 50%,
+          transparent 100%
+        );
+      }
+
+      .scene-ground-line {
+        background: radial-gradient(
+          ellipse 50% 80% at 50% 50%,
+          color-mix(in srgb, var(--ground-core) 35%, transparent) 0%,
+          color-mix(in srgb, var(--ground-hot) 18%, transparent) 45%,
+          transparent 100%
+        );
+      }
+    }
+
     .header,
     .portal-stage,
     .nav-dots {
@@ -562,19 +598,6 @@
       }
     }
 
-    html.is-standalone,
-    html.is-standalone body {
-      min-height: 100lvh;
-      min-height: -webkit-fill-available;
-    }
-
-    html.is-standalone .ambient,
-    html.is-standalone .theme-veil,
-    html.is-standalone .app-lock {
-      min-height: 100lvh;
-      min-height: -webkit-fill-available;
-    }
-
     html.is-standalone .header {
       padding-top: calc(16px + env(safe-area-inset-top, 47px));
     }
@@ -582,6 +605,10 @@
     html.is-standalone .app-lock {
       padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
       overflow: hidden;
+    }
+
+    html.is-standalone .nav-dots {
+      bottom: calc(22px + env(safe-area-inset-bottom, 34px));
     }
 
     html.is-standalone .scene-ground-chroma-wash,
@@ -671,8 +698,25 @@
     }
 
     @media (max-width: 768px) {
+      .app-lock {
+        padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+      }
+
       .portal-stage {
+        flex: 0 0 auto;
         padding-top: 8px;
+        padding-bottom: 0;
+      }
+
+      .portal {
+        flex: none;
+        height: 520px;
+        min-height: 520px;
+        max-height: 520px;
+      }
+
+      .nav-dots {
+        bottom: calc(48px + env(safe-area-inset-bottom, 0px));
       }
     }
 
@@ -1326,9 +1370,19 @@
       gap: 14px;
       justify-content: center;
       align-items: flex-end;
-      padding: 16px 0 10px;
-      position: relative;
+      padding: 0;
+      margin: 0;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(var(--ground-h) * 0.24);
+      transform: none;
       z-index: 2;
+      pointer-events: none;
+    }
+
+    .nav-dots .nav-dot {
+      pointer-events: auto;
     }
 
     .nav-dot {
@@ -2030,12 +2084,9 @@
         || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
       if (standalone) root.classList.add('is-standalone');
       function setAppVH() {
-        var vv = window.visualViewport && window.visualViewport.height;
-        var inner = window.innerHeight;
-        var client = root.clientHeight;
-        var vh = standalone
-          ? Math.max(vv || 0, inner || 0, client || 0)
-          : (vv || inner || client);
+        var vh = (window.visualViewport && window.visualViewport.height)
+          || window.innerHeight
+          || root.clientHeight;
         if (vh) root.style.setProperty('--app-vh', vh + 'px');
       }
       setAppVH();
@@ -2047,9 +2098,11 @@
       });
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', setAppVH);
-        window.visualViewport.addEventListener('scroll', setAppVH);
       }
-      [0, 50, 150, 300, 600, 1000, 2000, 4000].forEach(function (ms) {
+      // WebKit's stale value can take a moment to correct itself after
+      // the triggering events above, so re-check a few times while its
+      // internal layout settles rather than relying on a single read.
+      [50, 150, 300, 600, 1000].forEach(function (ms) {
         window.setTimeout(setAppVH, ms);
       });
     })();
