@@ -598,6 +598,25 @@
       }
     }
 
+    html.is-standalone .header {
+      padding-top: calc(16px + env(safe-area-inset-top, 47px));
+    }
+
+    html.is-standalone .app-lock {
+      padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+      overflow: hidden;
+    }
+
+    html.is-standalone .nav-dots {
+      bottom: calc(22px + env(safe-area-inset-bottom, 34px));
+    }
+
+    html.is-standalone .scene-ground-chroma-wash,
+    html.is-standalone .scene-ground-chroma-reflect,
+    html.is-standalone .scene-ground-chroma-line {
+      animation: none;
+    }
+
     @media (min-width: 769px) {
       .portal-stage {
         max-width: 440px;
@@ -2061,6 +2080,9 @@
     // unit otherwise (e.g. before this script runs, or with JS off).
     (function () {
       var root = document.documentElement;
+      var standalone = (window.navigator && window.navigator.standalone === true)
+        || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+      if (standalone) root.classList.add('is-standalone');
       function setAppVH() {
         var vh = (window.visualViewport && window.visualViewport.height)
           || window.innerHeight
