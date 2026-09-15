@@ -586,6 +586,25 @@
       .header {
         padding-top: 44px;
       }
+
+      .app-lock {
+        padding-bottom: calc(var(--ground-h) * 0.52 + env(safe-area-inset-bottom, 0px));
+      }
+
+      .portal-stage {
+        min-height: 0;
+        padding-bottom: 0;
+      }
+
+      .portal {
+        min-height: 0;
+        max-height: 100%;
+        flex: 1 1 auto;
+      }
+
+      .nav-dots {
+        bottom: calc(var(--ground-h) * 0.22 + env(safe-area-inset-bottom, 0px));
+      }
     }
 
     @media (min-width: 769px) {
@@ -2029,8 +2048,8 @@
     (function () {
       var root = document.documentElement;
       function setAppVH() {
-        var vh = window.innerHeight
-          || (window.visualViewport && window.visualViewport.height)
+        var vh = (window.visualViewport && window.visualViewport.height)
+          || window.innerHeight
           || root.clientHeight;
         if (vh) root.style.setProperty('--app-vh', vh + 'px');
       }
