@@ -2703,6 +2703,8 @@
       if (!guide) return;
 
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // Set to true to replay the guide automatically on first load.
+      const SHOW_INSTRUCTIONS_ON_LOAD = false;
       // Wait for the portal intro swirl to fully fade out, then add a
       // 1.5s buffer before the guide appears. Reduced-motion users never
       // see the swirl, so they keep the original short load delay.
@@ -2764,7 +2766,8 @@
       }
 
       guide.classList.add('is-ready');
-      later(playGuide, loadDelayMs);
+      if (SHOW_INSTRUCTIONS_ON_LOAD) later(playGuide, loadDelayMs);
+      else showHint();
 
       guide.addEventListener('pointerdown', dismissGuide);
       if (hint) {
