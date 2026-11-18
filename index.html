@@ -2072,33 +2072,34 @@
        top and bottom bars one solid colour: <body>'s background-color
        (this world's --page-base). The glow behind the portal is bright in
        the middle and dark at the sides, so no solid bar colour can match
-       it. Instead, on mobile Safari only, the glow layer (.ambient) fades
-       out toward the top and bottom edges, so the page edges land on
-       exactly the bar colour. The ground (.scene-ground) keeps its glow and
-       shadow — only its last 28px fade out. Nothing is painted over the
-       scene. Desktop and the home-screen web app (edge-to-edge) are
-       untouched. .ambient extends 120px past each edge, hence the offsets. */
+       it. On mobile Safari only:
+         - the glow layer (.ambient) fades out toward the top and bottom
+           edges so the page edges land on exactly the bar colour
+           (eased, long fade at the bottom);
+         - the ground and its shadow (.scene-ground) are hidden, since its
+           lit floor can't fade into a flat bar without looking cut off.
+       The glow around the portal itself (.portal-bloom) is unaffected.
+       Desktop and the home-screen web app (edge-to-edge) are untouched.
+       .ambient extends 120px past each edge, hence the 120px offsets. */
     @media (hover: none) and (pointer: coarse) and (max-width: 768px) {
       html:not(.is-standalone) .ambient {
-        -webkit-mask-image: linear-gradient(
+        --fade-mask: linear-gradient(
           to bottom,
           transparent 120px,
           #000 calc(120px + 90px),
-          #000 calc(100% - 120px - 140px),
+          #000 calc(100% - 120px - 300px),
+          rgba(0, 0, 0, 0.82) calc(100% - 120px - 225px),
+          rgba(0, 0, 0, 0.55) calc(100% - 120px - 150px),
+          rgba(0, 0, 0, 0.27) calc(100% - 120px - 80px),
+          rgba(0, 0, 0, 0.08) calc(100% - 120px - 30px),
           transparent calc(100% - 120px)
         );
-        mask-image: linear-gradient(
-          to bottom,
-          transparent 120px,
-          #000 calc(120px + 90px),
-          #000 calc(100% - 120px - 140px),
-          transparent calc(100% - 120px)
-        );
+        -webkit-mask-image: var(--fade-mask);
+        mask-image: var(--fade-mask);
       }
 
       html:not(.is-standalone) .scene-ground {
-        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 35%, #000 calc(100% - 28px), transparent 100%);
-        mask-image: linear-gradient(to bottom, transparent 0%, #000 35%, #000 calc(100% - 28px), transparent 100%);
+        display: none;
       }
     }
 
