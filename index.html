@@ -964,6 +964,10 @@
       z-index: 0;
       pointer-events: none;
       overflow: hidden;
+      /* Colour boost applied once to the whole strip. It used to sit on every
+         blade, which made the GPU render and filter 49 separate layers each
+         frame while the grass grew and swayed — the LifeOS stutter. */
+      filter: saturate(1.08) contrast(1.05);
     }
 
     .blade {
@@ -977,7 +981,6 @@
       opacity: 0;
       will-change: transform, opacity;
       background: linear-gradient(to top, var(--c1) 0%, var(--c2) 42%, var(--c3) 78%, var(--c4, var(--c3)) 100%);
-      filter: saturate(1.08) contrast(1.05);
     }
 
     .blade.b1  { left: 1%;  --h:28px; --w:5px; --tilt:-10deg; --skew:4deg;  --c1:#14532d; --c2:#166534; --c3:#15803d; --c4:#4ade80; }
@@ -3159,30 +3162,54 @@
       lifeSun.style.transform = `translate(${p.x}px, ${p.y}px) scale(${p.scale})`;
     }
 
+    // The sun's arc runs as one Web Animation (transform + opacity only),
+    // so the compositor plays it without a main-thread frame each tick —
+    // it used to be repositioned from JavaScript on every frame. The arc is
+    // sampled into keyframes with the same ease-out-cubic timing as before.
     function animateSun(fromT, toT, fromOp, toOp, duration) {
-      if (sunAnim) cancelAnimationFrame(sunAnim);
-      const start = performance.now();
-      return new Promise((resolve) => {
-        function frame(now) {
-          const u = Math.min(1, (now - start) / duration);
-          const e = 1 - Math.pow(1 - u, 3);
-          setSun(fromT + (toT - fromT) * e, fromOp + (toOp - fromOp) * e);
-          if (u < 1) sunAnim = requestAnimationFrame(frame);
-          else { sunAnim = null; resolve(); }
-        }
-        sunAnim = requestAnimationFrame(frame);
-      });
+      if (sunAnim) sunAnim.cancel();
+      const w = lifeWorld.clientWidth;
+      const h = lifeWorld.clientHeight;
+      const STEPS = 32;
+      const frames = [];
+      for (let k = 0; k <= STEPS; k++) {
+        const u = k / STEPS;
+        const e = 1 - Math.pow(1 - u, 3);
+        const p = sunPoint(fromT + (toT - fromT) * e, w, h);
+        frames.push({
+          offset: u,
+          transform: `translate(${p.x}px, ${p.y}px) scale(${p.scale})`,
+          opacity: fromOp + (toOp - fromOp) * e
+        });
+      }
+      // Commit the end state as the inline style; the animation plays over it.
+      setSun(toT, toOp);
+      const anim = lifeSun.animate(frames, { duration, easing: 'linear' });
+      sunAnim = anim;
+      return anim.finished.then(
+        () => { if (sunAnim === anim) sunAnim = null; },
+        () => {}  // cancelled by a newer animateSun call
+      );
     }
 
+    // One pass to reset every blade, then one double-rAF to start them all
+    // (previously 49 separate double-rAF callbacks). 0.001 instead of 0 keeps
+    // the start transform invertible, so the browser can run the transition
+    // on the compositor.
+    let grassRaf = 0;
     function growGrass() {
+      cancelAnimationFrame(grassRaf);
       blades.forEach((blade, i) => {
-        const delay = 20 + i * 16;
         const { tilt, skew } = bladeShape[i];
         blade.style.transition = 'none';
         blade.style.opacity = '0';
-        blade.style.transform = `scaleY(0) rotate(${tilt}) skewX(${skew})`;
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
+        blade.style.transform = `scaleY(0.001) rotate(${tilt}) skewX(${skew})`;
+      });
+      grassRaf = requestAnimationFrame(() => {
+        grassRaf = requestAnimationFrame(() => {
+          blades.forEach((blade, i) => {
+            const delay = 20 + i * 16;
+            const { tilt, skew } = bladeShape[i];
             blade.style.transition =
               `transform ${GRASS_MS}ms cubic-bezier(0.22, 1.25, 0.36, 1) ${delay}ms,` +
               `opacity 260ms ease ${delay}ms`;
@@ -3194,6 +3221,7 @@
     }
 
     function retractGrass() {
+      cancelAnimationFrame(grassRaf);
       blades.forEach((blade, i) => {
         const delay = i * 10;
         const { tilt, skew } = bladeShape[i];
@@ -3201,7 +3229,7 @@
           `transform 500ms cubic-bezier(0.4, 0, 0.2, 1) ${delay}ms,` +
           `opacity 200ms ease ${delay + 160}ms`;
         blade.style.opacity = '0';
-        blade.style.transform = `scaleY(0) rotate(${tilt}) skewX(${skew})`;
+        blade.style.transform = `scaleY(0.001) rotate(${tilt}) skewX(${skew})`;
       });
     }
 
