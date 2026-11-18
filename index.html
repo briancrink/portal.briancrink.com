@@ -45,10 +45,10 @@
       to { --portal-spin: 360deg; }
     }
 
-    /* GPU-only spin: rotating an element with transform never repaints,
-       unlike animating --portal-spin inside a conic-gradient (which forced a
-       full repaint + re-blur of every glow layer on every frame and made the
-       page sluggish, most noticeably while a link is selected). */
+    /* Spin by rotating the element itself — used for the small circular
+       header-button rings only (the large portal glows keep --portal-spin:
+       rotating oversized clipped + blurred copies of them on the GPU proved
+       slower on real hardware). */
     @keyframes portalSpinT {
       to { transform: rotate(360deg); }
     }
@@ -105,15 +105,15 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-outset));
       z-index: 0;
       background: conic-gradient(
-        from 0deg,
+        from var(--portal-spin),
         var(--bloom-a),
         var(--bloom-b),
         var(--bloom-c),
         var(--bloom-a)
       );
       animation:
+        portalSpin 7s linear infinite,
         portalBloomBreathe 4.5s ease-in-out infinite;
-      --spin-dur: 7s;
     }
 
     .portal-bloom-soft {
@@ -121,15 +121,15 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-soft-outset));
       z-index: 0;
       background: conic-gradient(
-        from 0deg,
+        from var(--portal-spin),
         var(--bloom-a),
         var(--bloom-b),
         var(--bloom-c),
         var(--bloom-a)
       );
       animation:
+        portalSpin 11s linear infinite,
         portalBloomBreatheSoft 4.5s ease-in-out infinite;
-      --spin-dur: 11s;
     }
 
     .portal-rim {
@@ -137,7 +137,7 @@
       border-radius: calc(var(--portal-radius) + var(--rim-outset));
       z-index: 1;
       background: conic-gradient(
-        from 0deg,
+        from var(--portal-spin),
         var(--rim-hot) 0%,
         var(--bloom-a) 20%,
         var(--bloom-b) 40%,
@@ -145,7 +145,7 @@
         var(--bloom-a) 80%,
         var(--rim-hot) 100%
       );
-      --spin-dur: 5.5s;
+      animation: portalSpin 5.5s linear infinite;
       padding: var(--rim-outset);
       -webkit-mask:
         linear-gradient(#000 0 0) content-box,
@@ -211,12 +211,12 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-outset));
       z-index: 0;
       background: conic-gradient(
-        from 0deg,
+        from var(--portal-spin),
         #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #ff006e
       );
       animation:
+        portalSpin 7s linear infinite,
         portalChromaBloomPulse 4.5s ease-in-out infinite;
-      --spin-dur: 7s;
     }
 
     .portal-bloom-chroma-soft {
@@ -224,12 +224,12 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-soft-outset));
       z-index: 0;
       background: conic-gradient(
-        from 0deg,
+        from var(--portal-spin),
         #ff4d6d, #c77dff, #4cc9f0, #80ed99, #ffd60a, #ff4d6d
       );
       animation:
+        portalSpin 11s linear infinite,
         portalChromaBloomPulseSoft 4.5s ease-in-out infinite;
-      --spin-dur: 11s;
     }
 
     .portal-rim-chroma {
@@ -237,10 +237,10 @@
       border-radius: calc(var(--portal-radius) + var(--rim-outset));
       z-index: 1;
       background: conic-gradient(
-        from 0deg,
+        from var(--portal-spin),
         #fff, #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #fff
       );
-      --spin-dur: 5.5s;
+      animation: portalSpin 5.5s linear infinite;
       padding: var(--rim-outset);
       -webkit-mask:
         linear-gradient(#000 0 0) content-box,
@@ -255,41 +255,11 @@
         0 0 22px 3px rgba(131, 56, 236, 0.55);
     }
 
-    /* Each glow layer clips an oversized copy of its own (static) conic
-       gradient and rotates that copy — same look as before, but the browser
-       only re-composites instead of repainting. */
-    .portal-bloom,
-    .portal-bloom-soft,
-    .portal-rim,
-    .portal-bloom-chroma,
-    .portal-bloom-chroma-soft,
-    .portal-rim-chroma {
-      overflow: hidden;
-    }
-
-    .portal-bloom::before,
-    .portal-bloom-soft::before,
-    .portal-rim::before,
-    .portal-bloom-chroma::before,
-    .portal-bloom-chroma-soft::before,
-    .portal-rim-chroma::before {
-      content: "";
-      position: absolute;
-      inset: -50%;
-      background: inherit;
-      animation: portalSpinT var(--spin-dur, 7s) linear infinite;
-      will-change: transform;
-      pointer-events: none;
-    }
-
     /* Rainbow layers are invisible until a link is selected: don't animate
        them while hidden. */
     .portal-shell:not(.chroma) .portal-bloom-chroma,
     .portal-shell:not(.chroma) .portal-bloom-chroma-soft,
-    .portal-shell:not(.chroma) .portal-rim-chroma,
-    .portal-shell:not(.chroma) .portal-bloom-chroma::before,
-    .portal-shell:not(.chroma) .portal-bloom-chroma-soft::before,
-    .portal-shell:not(.chroma) .portal-rim-chroma::before {
+    .portal-shell:not(.chroma) .portal-rim-chroma {
       animation-play-state: paused;
     }
 
@@ -312,14 +282,6 @@
       .portal-bloom,
       .portal-bloom-soft,
       .portal-rim {
-        animation: none;
-      }
-      .portal-bloom::before,
-      .portal-bloom-soft::before,
-      .portal-rim::before,
-      .portal-bloom-chroma::before,
-      .portal-bloom-chroma-soft::before,
-      .portal-rim-chroma::before {
         animation: none;
       }
       .portal-bloom { filter: blur(16px); opacity: 0.65; }
@@ -3821,9 +3783,15 @@
         ctx.clearRect(0, 0, width, height);
       }
 
+      // dt = elapsed time in 60fps-frame units, so every rate below keeps its
+      // original tuning but the animation runs at the same real-time speed
+      // whatever the frame rate (it used to slow down when frames dropped).
+      let dt = 1;
+      let lastLoopTime = 0;
+
       function updateDots() {
         for (const d of dots) {
-          d.age++;
+          d.age += dt;
           if (d.state === 'emerging') {
             if (d.age < 28) {
               d.scale = d.age / 28 * 1.55;
@@ -3837,13 +3805,13 @@
               d.pulse = Math.random() * Math.PI * 2;
             }
           } else if (d.state === 'pulsing') {
-            d.pulse += 0.022;
+            d.pulse += 0.022 * dt;
             d.scale = 1 + Math.sin(d.pulse) * 0.28;
-            if (d.canvasFade) d.alpha = Math.max(0, d.alpha - 0.018);
+            if (d.canvasFade) d.alpha = Math.max(0, d.alpha - 0.018 * dt);
             else d.alpha = 1;
           } else if (d.state === 'fading') {
-            d.alpha -= (mode === 'hire' ? 0.016 : 0.028);
-            d.scale *= 0.98;
+            d.alpha -= (mode === 'hire' ? 0.016 : 0.028) * dt;
+            d.scale *= Math.pow(0.98, dt);
           }
         }
         dots = dots.filter(d => !(d.state === 'fading' && d.alpha <= 0.02));
@@ -3852,7 +3820,7 @@
 
       function tickMarket() {
         if (!active || mode !== 'jobs') return;
-        frame++;
+        frame += dt;
         const live = dots.filter(d => d.state !== 'fading').length;
         if (live < MAX_DOTS) {
           if (frame >= nextSpawnAt) {
@@ -3888,7 +3856,7 @@
 
       function tickHireCamera() {
         if (mode !== 'hire') return;
-        hireWait++;
+        hireWait += dt;
 
         if (hirePhase === 'emerge') {
           if (chosen && chosen.state === 'pulsing' && hireWait > 8) {
@@ -3928,7 +3896,7 @@
 
         if (hirePhase === 'pan' || hirePhase === 'zoom') {
           const dur = hirePhase === 'pan' ? HIRE_PAN_FRAMES : HIRE_ZOOM_FRAMES;
-          hireTween = Math.min(1, hireTween + 1 / dur);
+          hireTween = Math.min(1, hireTween + dt / dur);
           const k = easeInOutCubic(hireTween);
           camX = fromCamX + (targetCamX - fromCamX) * k;
           camY = fromCamY + (targetCamY - fromCamY) * k;
@@ -4014,8 +3982,12 @@
         }
       }
 
-      function loop() {
+      function loop(now) {
         raf = requestAnimationFrame(loop);
+        now = now || performance.now();
+        // Clamp so a background tab / long stall doesn't jump the scene.
+        dt = lastLoopTime ? Math.min(3, Math.max(0, (now - lastLoopTime) / (1000 / 60))) : 1;
+        lastLoopTime = now;
         if (!active) return;
         const rect = workWorld.getBoundingClientRect();
         if (Math.abs(rect.width - width) > 1 || Math.abs(rect.height - height) > 1) resize();
