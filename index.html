@@ -440,22 +440,22 @@
     body.portal-life .ambient {
       background:
         radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(14, 164, 233, 0.811), transparent 70%),
-        #020617;
+        linear-gradient(#020617, #020617);
     }
     body.portal-build .ambient {
       background:
         radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(22, 163, 74, 0.811), transparent 70%),
-        #03140a;
+        linear-gradient(#03140a, #03140a);
     }
     body.portal-work .ambient {
       background:
         radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(120, 32, 244, 0.811), transparent 70%),
-        #070016;
+        linear-gradient(#070016, #070016);
     }
     body.portal-commerce .ambient {
       background:
         radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(255, 89, 0, 0.811), transparent 70%),
-        #321200;
+        linear-gradient(#321200, #321200);
     }
 
     @media (max-width: 768px) {
@@ -2067,16 +2067,41 @@
       opacity: 1;
     }
 
-    /* iOS 26 Safari ignores <meta name="theme-color"> and paints its top
-       and bottom bars a solid colour taken from the page (this world's
-       --page-base). A site can't hide or see through those bars, so the
-       page's own top and bottom edges fade into that same colour instead —
-       the bars read as part of the scene rather than as pasted-on strips.
-       Uses background-image only (no background-color) so Safari never
-       samples this layer for its tint. */
+    /* ---- Mobile Safari toolbar blending -------------------------------
+       iOS 26 Safari ignores <meta name="theme-color"> and paints its top
+       and bottom bars a solid colour sampled from a fixed element touching
+       that edge. Two invisible strips (.edge-tint) hand Safari the colour
+       the page actually has at each edge (top glow / lit ground), and a
+       thin .edge-fade blends the page into exactly those colours, so the
+       existing gradients and the ground shadow stay intact.
+       Mobile Safari only: desktop and the home-screen web app (which
+       draws edge-to-edge itself) get neither. */
+    body.portal-life     { --edge-top-color: #052743; --edge-bottom-color: #09273a; }
+    body.portal-build    { --edge-top-color: #073217; --edge-bottom-color: #072d15; }
+    body.portal-work     { --edge-top-color: #1f0745; --edge-bottom-color: #120926; }
+    body.portal-commerce { --edge-top-color: #5d2100; --edge-bottom-color: #461c03; }
+    body.portal-dark     { --edge-top-color: #000000; --edge-bottom-color: #000000; }
+
+    .edge-tint,
     .edge-fade {
-      --edge-top: 64px;
-      --edge-bottom: 40px;
+      display: none;
+    }
+
+    .edge-tint {
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: 12px;
+      visibility: hidden; /* still sampled by Safari, never painted */
+      pointer-events: none;
+      z-index: 40;
+    }
+    .edge-tint-top    { top: 0;    background-color: var(--edge-top-color); }
+    .edge-tint-bottom { bottom: 0; background-color: var(--edge-bottom-color); }
+
+    .edge-fade {
+      --edge-top: 32px;
+      --edge-bottom: 24px;
       position: fixed;
       top: -120px;
       bottom: -120px;
@@ -2086,13 +2111,20 @@
       pointer-events: none;
       background-image: linear-gradient(
         to bottom,
-        var(--page-base) 0,
-        var(--page-base) 120px,
+        var(--edge-top-color) 0,
+        var(--edge-top-color) 120px,
         transparent calc(120px + var(--edge-top)),
         transparent calc(100% - 120px - var(--edge-bottom)),
-        var(--page-base) calc(100% - 120px),
-        var(--page-base) 100%
+        var(--edge-bottom-color) calc(100% - 120px),
+        var(--edge-bottom-color) 100%
       );
+    }
+
+    @media (hover: none) and (pointer: coarse) and (max-width: 768px) {
+      html:not(.is-standalone) .edge-tint,
+      html:not(.is-standalone) .edge-fade {
+        display: block;
+      }
     }
 
   </style>
@@ -2166,6 +2198,8 @@
     <div class="scene-ground-chroma-line"></div>
   </div>
   <div class="edge-fade" aria-hidden="true"></div>
+  <div class="edge-tint edge-tint-top" aria-hidden="true"></div>
+  <div class="edge-tint edge-tint-bottom" aria-hidden="true"></div>
 
 
   <div class="app-lock">
