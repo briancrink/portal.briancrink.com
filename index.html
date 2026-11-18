@@ -45,6 +45,14 @@
       to { --portal-spin: 360deg; }
     }
 
+    /* GPU-only spin: rotating an element with transform never repaints,
+       unlike animating --portal-spin inside a conic-gradient (which forced a
+       full repaint + re-blur of every glow layer on every frame and made the
+       page sluggish, most noticeably while a link is selected). */
+    @keyframes portalSpinT {
+      to { transform: rotate(360deg); }
+    }
+
     @keyframes portalBloomBreathe {
       0%, 100% { filter: blur(14px); opacity: 0.55; }
       50%      { filter: blur(22px); opacity: 0.85; }
@@ -57,6 +65,22 @@
 
     @keyframes chromaHue {
       to { --chroma-hue: 360deg; }
+    }
+
+    /* Hue cycling as a plain filter animation runs on the GPU; driving
+       hue-rotate() through the --chroma-hue custom property repainted the
+       blurred layers on the main thread every frame. */
+    @keyframes chromaHueWash {
+      from { filter: saturate(1.08) hue-rotate(0deg); }
+      to   { filter: saturate(1.08) hue-rotate(360deg); }
+    }
+    @keyframes chromaHueReflect {
+      from { filter: blur(26px) saturate(1.12) hue-rotate(0deg); }
+      to   { filter: blur(26px) saturate(1.12) hue-rotate(360deg); }
+    }
+    @keyframes chromaHueLine {
+      from { filter: blur(14px) saturate(1.08) hue-rotate(0deg); }
+      to   { filter: blur(14px) saturate(1.08) hue-rotate(360deg); }
     }
 
     .portal-shell {
@@ -81,15 +105,15 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-outset));
       z-index: 0;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         var(--bloom-a),
         var(--bloom-b),
         var(--bloom-c),
         var(--bloom-a)
       );
       animation:
-        portalSpin 7s linear infinite,
         portalBloomBreathe 4.5s ease-in-out infinite;
+      --spin-dur: 7s;
     }
 
     .portal-bloom-soft {
@@ -97,15 +121,15 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-soft-outset));
       z-index: 0;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         var(--bloom-a),
         var(--bloom-b),
         var(--bloom-c),
         var(--bloom-a)
       );
       animation:
-        portalSpin 11s linear infinite,
         portalBloomBreatheSoft 4.5s ease-in-out infinite;
+      --spin-dur: 11s;
     }
 
     .portal-rim {
@@ -113,7 +137,7 @@
       border-radius: calc(var(--portal-radius) + var(--rim-outset));
       z-index: 1;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         var(--rim-hot) 0%,
         var(--bloom-a) 20%,
         var(--bloom-b) 40%,
@@ -121,7 +145,7 @@
         var(--bloom-a) 80%,
         var(--rim-hot) 100%
       );
-      animation: portalSpin 5.5s linear infinite;
+      --spin-dur: 5.5s;
       padding: var(--rim-outset);
       -webkit-mask:
         linear-gradient(#000 0 0) content-box,
@@ -187,12 +211,12 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-outset));
       z-index: 0;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #ff006e
       );
       animation:
-        portalSpin 7s linear infinite,
         portalChromaBloomPulse 4.5s ease-in-out infinite;
+      --spin-dur: 7s;
     }
 
     .portal-bloom-chroma-soft {
@@ -200,12 +224,12 @@
       border-radius: calc(var(--portal-radius) + var(--bloom-soft-outset));
       z-index: 0;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         #ff4d6d, #c77dff, #4cc9f0, #80ed99, #ffd60a, #ff4d6d
       );
       animation:
-        portalSpin 11s linear infinite,
         portalChromaBloomPulseSoft 4.5s ease-in-out infinite;
+      --spin-dur: 11s;
     }
 
     .portal-rim-chroma {
@@ -213,10 +237,10 @@
       border-radius: calc(var(--portal-radius) + var(--rim-outset));
       z-index: 1;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         #fff, #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #fff
       );
-      animation: portalSpin 5.5s linear infinite;
+      --spin-dur: 5.5s;
       padding: var(--rim-outset);
       -webkit-mask:
         linear-gradient(#000 0 0) content-box,
@@ -229,6 +253,44 @@
       box-shadow:
         0 0 10px 1px rgba(255, 255, 255, 0.7),
         0 0 22px 3px rgba(131, 56, 236, 0.55);
+    }
+
+    /* Each glow layer clips an oversized copy of its own (static) conic
+       gradient and rotates that copy — same look as before, but the browser
+       only re-composites instead of repainting. */
+    .portal-bloom,
+    .portal-bloom-soft,
+    .portal-rim,
+    .portal-bloom-chroma,
+    .portal-bloom-chroma-soft,
+    .portal-rim-chroma {
+      overflow: hidden;
+    }
+
+    .portal-bloom::before,
+    .portal-bloom-soft::before,
+    .portal-rim::before,
+    .portal-bloom-chroma::before,
+    .portal-bloom-chroma-soft::before,
+    .portal-rim-chroma::before {
+      content: "";
+      position: absolute;
+      inset: -50%;
+      background: inherit;
+      animation: portalSpinT var(--spin-dur, 7s) linear infinite;
+      will-change: transform;
+      pointer-events: none;
+    }
+
+    /* Rainbow layers are invisible until a link is selected: don't animate
+       them while hidden. */
+    .portal-shell:not(.chroma) .portal-bloom-chroma,
+    .portal-shell:not(.chroma) .portal-bloom-chroma-soft,
+    .portal-shell:not(.chroma) .portal-rim-chroma,
+    .portal-shell:not(.chroma) .portal-bloom-chroma::before,
+    .portal-shell:not(.chroma) .portal-bloom-chroma-soft::before,
+    .portal-shell:not(.chroma) .portal-rim-chroma::before {
+      animation-play-state: paused;
     }
 
     .portal-shell.chroma .portal-bloom-chroma,
@@ -250,6 +312,14 @@
       .portal-bloom,
       .portal-bloom-soft,
       .portal-rim {
+        animation: none;
+      }
+      .portal-bloom::before,
+      .portal-bloom-soft::before,
+      .portal-rim::before,
+      .portal-bloom-chroma::before,
+      .portal-bloom-chroma-soft::before,
+      .portal-rim-chroma::before {
         animation: none;
       }
       .portal-bloom { filter: blur(16px); opacity: 0.65; }
@@ -370,8 +440,8 @@
         color-mix(in srgb, #9b6dff 9%, transparent) 58%,
         color-mix(in srgb, #5aa9ff 7%, transparent) 100%
       );
-      filter: saturate(1.08) hue-rotate(var(--chroma-hue));
-      animation: chromaHue 11s linear infinite;
+      filter: saturate(1.08);
+      animation: chromaHueWash 11s linear infinite;
     }
 
     .scene-ground-chroma-reflect {
@@ -388,8 +458,8 @@
         rgba(90, 169, 255, 0.12) 52%,
         transparent 78%
       );
-      filter: blur(26px) saturate(1.12) hue-rotate(var(--chroma-hue));
-      animation: chromaHue 11s linear infinite;
+      filter: blur(26px) saturate(1.12);
+      animation: chromaHueReflect 11s linear infinite;
     }
 
     .scene-ground-chroma-line {
@@ -405,8 +475,14 @@
         rgba(155, 109, 255, 0.10) 55%,
         transparent 85%
       );
-      filter: blur(14px) saturate(1.08) hue-rotate(var(--chroma-hue));
-      animation: chromaHue 11s linear infinite;
+      filter: blur(14px) saturate(1.08);
+      animation: chromaHueLine 11s linear infinite;
+    }
+
+    body:not(:has(.portal-shell.chroma)) .scene-ground-chroma-wash,
+    body:not(:has(.portal-shell.chroma)) .scene-ground-chroma-reflect,
+    body:not(:has(.portal-shell.chroma)) .scene-ground-chroma-line {
+      animation-play-state: paused;
     }
 
     body:has(.portal-shell.chroma) .scene-ground-chroma-wash { opacity: 0.88; }
@@ -1348,6 +1424,7 @@
     }
 
     .links a.is-selected {
+      transition-duration: 0s; /* snap in on arrow keys; old one still fades out */
       background: rgba(255, 255, 255, 0.22);
       border-color: rgba(255, 255, 255, 0.4);
       outline: none;
@@ -1571,7 +1648,7 @@
       inset: 0;
       padding: 2px;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         rgba(255, 255, 255, 0.4) 0deg,
         rgba(255, 255, 255, 0.12) 40deg,
         rgba(255, 255, 255, 0.06) 120deg,
@@ -1587,7 +1664,8 @@
         linear-gradient(#000 0 0);
       -webkit-mask-composite: xor;
       mask-composite: exclude;
-      animation: portalSpin 5.5s linear infinite;
+      animation: portalSpinT 5.5s linear infinite;
+      will-change: transform;
       filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
     }
 
@@ -1821,7 +1899,7 @@
       inset: 0;
       padding: 2px;
       background: conic-gradient(
-        from var(--portal-spin),
+        from 0deg,
         rgba(255, 255, 255, 0.4) 0deg,
         rgba(255, 255, 255, 0.12) 40deg,
         rgba(255, 255, 255, 0.06) 120deg,
@@ -1837,7 +1915,8 @@
         linear-gradient(#000 0 0);
       -webkit-mask-composite: xor;
       mask-composite: exclude;
-      animation: portalSpin 5.5s linear infinite;
+      animation: portalSpinT 5.5s linear infinite;
+      will-change: transform;
       filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.4));
     }
 
