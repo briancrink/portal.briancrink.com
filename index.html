@@ -421,9 +421,17 @@
       }
     }
 
+    /* Fixed backdrop layers extend 120px past the top and bottom so the
+       page still reaches both screen edges when iOS reports a stale
+       (short) viewport — e.g. a home-screen web app after a reload. The
+       glow's vertical radius uses the measured viewport height, so it
+       looks exactly as it did when the layer was inset: 0. */
     .ambient {
       position: fixed;
-      inset: 0;
+      top: -120px;
+      bottom: -120px;
+      left: 0;
+      right: 0;
       z-index: 0;
       pointer-events: none;
       transition: background 0.55s ease;
@@ -431,22 +439,22 @@
 
     body.portal-life .ambient {
       background:
-        radial-gradient(ellipse 90% 120% at 50% 50%, rgba(14, 164, 233, 0.811), transparent 70%),
+        radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(14, 164, 233, 0.811), transparent 70%),
         #020617;
     }
     body.portal-build .ambient {
       background:
-        radial-gradient(ellipse 90% 120% at 50% 50%, rgba(22, 163, 74, 0.811), transparent 70%),
+        radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(22, 163, 74, 0.811), transparent 70%),
         #03140a;
     }
     body.portal-work .ambient {
       background:
-        radial-gradient(ellipse 90% 120% at 50% 50%, rgba(120, 32, 244, 0.811), transparent 70%),
+        radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(120, 32, 244, 0.811), transparent 70%),
         #070016;
     }
     body.portal-commerce .ambient {
       background:
-        radial-gradient(ellipse 90% 120% at 50% 50%, rgba(255, 89, 0, 0.811), transparent 70%),
+        radial-gradient(90% calc(var(--app-vh, 100dvh) * 1.2) at 50% 50%, rgba(255, 89, 0, 0.811), transparent 70%),
         #321200;
     }
 
@@ -2044,7 +2052,10 @@
 
     .theme-veil {
       position: fixed;
-      inset: 0;
+      top: -120px;
+      bottom: -120px;
+      left: 0;
+      right: 0;
       z-index: 0;
       pointer-events: none;
       background: #000000;
@@ -2056,13 +2067,41 @@
       opacity: 1;
     }
 
+    /* iOS 26 Safari ignores <meta name="theme-color"> and paints its top
+       and bottom bars a solid colour taken from the page (this world's
+       --page-base). A site can't hide or see through those bars, so the
+       page's own top and bottom edges fade into that same colour instead —
+       the bars read as part of the scene rather than as pasted-on strips.
+       Uses background-image only (no background-color) so Safari never
+       samples this layer for its tint. */
+    .edge-fade {
+      --edge-top: 64px;
+      --edge-bottom: 40px;
+      position: fixed;
+      top: -120px;
+      bottom: -120px;
+      left: 0;
+      right: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image: linear-gradient(
+        to bottom,
+        var(--page-base) 0,
+        var(--page-base) 120px,
+        transparent calc(120px + var(--edge-top)),
+        transparent calc(100% - 120px - var(--edge-bottom)),
+        var(--page-base) calc(100% - 120px),
+        var(--page-base) 100%
+      );
+    }
+
   </style>
 </head>
 <body class="portal-life">
   <script>
     (function () {
-      var map = { life: 'life', dev: 'build', career: 'work', business: 'commerce' };
-      var theme = { life: '#020617', build: '#03140a', work: '#000000', commerce: '#321200' };
+      var map = { life: 'life', dev: 'build', career: 'work', boss: 'commerce', business: 'commerce' };
+      var theme = { life: '#020617', build: '#03140a', work: '#070016', commerce: '#321200' };
       var key = String(location.hash || '').replace(/^#/, '').trim().toLowerCase();
       var name = map[key] || 'life';
       document.body.classList.remove('portal-life', 'portal-build', 'portal-work', 'portal-commerce');
@@ -2126,6 +2165,7 @@
     <div class="scene-ground-chroma-reflect"></div>
     <div class="scene-ground-chroma-line"></div>
   </div>
+  <div class="edge-fade" aria-hidden="true"></div>
 
 
   <div class="app-lock">
@@ -2873,7 +2913,7 @@
     const THEME = {
       life:     '#020617',
       build:    '#03140a',
-      work:     '#000000',
+      work:     '#070016',
       commerce: '#321200'
     };
     const LIFE_MOVE_MS = 1100;
