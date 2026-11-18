@@ -1423,8 +1423,14 @@
       border-color: rgba(255,255,255,0.28);
     }
 
+    /* While the selection moves (arrow keys / hover), both the old and the
+       new link switch in the same frame — otherwise the old one fades out
+       over 150ms and both look selected at once. */
+    .links.is-switching a {
+      transition: none;
+    }
+
     .links a.is-selected {
-      transition-duration: 0s; /* snap in on arrow keys; old one still fades out */
       background: rgba(255, 255, 255, 0.22);
       border-color: rgba(255, 255, 255, 0.4);
       outline: none;
@@ -2431,19 +2437,19 @@
 
       <section class="world build" data-portal="build" data-index="1" id="buildWorld">
         <div class="build-icons" aria-hidden="true">
-          <span class="build-icon i1"><img src="resources/images/icons/color/accessedu.png" alt="S"></span>
-          <span class="build-icon i2"><img src="resources/images/icons/color/Edison Bulb.png" alt=💡></span>
-          <span class="build-icon i3"><img src="resources/images/icons/color/Notion Sticker.png" alt="N"></span>
-          <span class="build-icon i4"><img src="resources/images/icons/color/Macbook Pro Welcome Screen.png" alt=📦></span>
-          <span class="build-icon i5"><img src="resources/images/icons/color/Apple Home.png" alt=🏠></span>
-          <span class="build-icon i6"><img src="resources/images/icons/color/Monitor.png" alt="M"></span>
-          <span class="build-icon i7"><img src="resources/images/icons/color/Home Build.png" alt=📱></span>
-          <span class="build-icon i8"><img src="resources/images/icons/color/tiny.png" alt=⬜></span>
-          <span class="build-icon i9"><img src="resources/images/icons/color/Application Window 2.png" alt=🏠></span>
-          <span class="build-icon i10"><img src="resources/images/icons/color/VS Code.png" alt=📱></span>
-          <span class="build-icon i11"><img src="resources/images/icons/color/Scooter.png" alt=⬜></span>
-          <span class="build-icon i12"><img src="resources/images/icons/color/Server Rack.png" alt=📱></span>
-          <span class="build-icon i13"><img src="resources/images/icons/color/Whiteboard.png" alt=⬜></span>
+          <span class="build-icon i1"><img data-src="resources/images/icons/color/accessedu.png" alt="" decoding="async"></span>
+          <span class="build-icon i2"><img data-src="resources/images/icons/color/Edison Bulb.png" alt="" decoding="async"></span>
+          <span class="build-icon i3"><img data-src="resources/images/icons/color/Notion Sticker.png" alt="" decoding="async"></span>
+          <span class="build-icon i4"><img data-src="resources/images/icons/color/Macbook Pro Welcome Screen.png" alt="" decoding="async"></span>
+          <span class="build-icon i5"><img data-src="resources/images/icons/color/Apple Home.png" alt="" decoding="async"></span>
+          <span class="build-icon i6"><img data-src="resources/images/icons/color/Monitor.png" alt="" decoding="async"></span>
+          <span class="build-icon i7"><img data-src="resources/images/icons/color/Home Build.png" alt="" decoding="async"></span>
+          <span class="build-icon i8"><img data-src="resources/images/icons/color/tiny.png" alt="" decoding="async"></span>
+          <span class="build-icon i9"><img data-src="resources/images/icons/color/Application Window 2.png" alt="" decoding="async"></span>
+          <span class="build-icon i10"><img data-src="resources/images/icons/color/VS Code.png" alt="" decoding="async"></span>
+          <span class="build-icon i11"><img data-src="resources/images/icons/color/Scooter.png" alt="" decoding="async"></span>
+          <span class="build-icon i12"><img data-src="resources/images/icons/color/Server Rack.png" alt="" decoding="async"></span>
+          <span class="build-icon i13"><img data-src="resources/images/icons/color/Whiteboard.png" alt="" decoding="async"></span>
         </div>
 
         <h2>Dev<span class="os-mark">OS</span></h2>
@@ -2556,11 +2562,40 @@
     const blades = [...document.querySelectorAll('.blade')];
     const buildIcons = [...document.querySelectorAll('.build-icon')];
 
+    // DevOS icon images are large source files (several are 4000-5000px).
+    // Loading + decoding them during the intro swirl starved its first
+    // second of frames, so they load after the intro (or immediately if
+    // DevOS is opened first). decoding="async" keeps decode off the main
+    // thread either way.
+    let buildIconsLoaded = false;
+    function loadBuildIcons() {
+      if (buildIconsLoaded) return;
+      buildIconsLoaded = true;
+      document.querySelectorAll('.build-icon img[data-src]').forEach((img) => {
+        img.src = img.dataset.src;
+        img.removeAttribute('data-src');
+      });
+    }
+
+    // Blade tilt/skew come from static CSS custom properties: read them
+    // once, instead of a getComputedStyle per blade on every grow/retract
+    // (interleaved with style writes, that forced ~49 full style
+    // recalculations in a single frame).
+    const bladeShape = blades.map((blade) => {
+      const cs = getComputedStyle(blade);
+      return {
+        tilt: cs.getPropertyValue('--tilt').trim() || '0deg',
+        skew: cs.getPropertyValue('--skew').trim() || '0deg'
+      };
+    });
+
     // Total real-world time the swirling portal intro stays visible
     // (matches .portal-intro's CSS fade-out duration below). The
     // first-load guide overlay waits for this to finish, plus its
     // own buffer, before it appears — see initPortalGuide().
     const PORTAL_INTRO_VISIBLE_MS = 2800;
+    // When the swirl starts opening (it fully covers the portal before this).
+    const PORTAL_INTRO_REVEAL_MS = 950;
 
     (function initPortalIntro() {
       const introEl = document.getElementById('portalIntro');
@@ -2717,7 +2752,7 @@
         });
       }
 
-      const HOLD_MS = 950;
+      const HOLD_MS = PORTAL_INTRO_REVEAL_MS;
       const OPEN_MS = 1350;
       const TOTAL_MS = HOLD_MS + OPEN_MS;
       const CHROMA_OFF_MS = HOLD_MS;
@@ -2743,11 +2778,14 @@
         ctx.globalCompositeOperation = 'source-over';
       }
 
-      const startTime = performance.now();
+      // Clock starts on the first painted frame, so boot work that runs
+      // before it can't make the swirl jump ahead.
+      let startTime = null;
       let chromaOff = false;
       let glowFrameToggle = false;
 
       function draw(now) {
+        if (startTime === null) startTime = now;
         const elapsed = now - startTime;
         const cx = width / 2, cy = height / 2;
 
@@ -2829,6 +2867,12 @@
       setTimeout(() => portalShell.classList.remove('chroma'), CHROMA_OFF_MS);
       setTimeout(cleanup, PORTAL_INTRO_VISIBLE_MS + 80);
     })();
+
+    // Fetch the DevOS icons once the intro has finished, during idle time.
+    window.setTimeout(() => {
+      if (window.requestIdleCallback) requestIdleCallback(loadBuildIcons, { timeout: 1500 });
+      else loadBuildIcons();
+    }, PORTAL_INTRO_VISIBLE_MS + 200);
 
     (function initPortalGuide() {
       const guide = document.getElementById('portalGuide');
@@ -3017,6 +3061,7 @@
     let sunAnim = null;
     let transitioning = false;
     let economyResize = null;
+    let bootEffectsPending = true;
 
     function setThemeColor(name) {
       const meta = document.getElementById('themeColor');
@@ -3075,6 +3120,8 @@
       const links = getActiveLinks();
       if (!links.length) return;
 
+      const list = links[0].parentElement;
+      list.classList.add('is-switching');
       clearLinkSelection({ restoreSubtitle: false, syncJobs: false });
       linkIndex = ((next % links.length) + links.length) % links.length;
       const link = links[linkIndex];
@@ -3082,6 +3129,9 @@
       setActiveSubtitle(link.getAttribute('data-subtitle') || link.textContent.trim());
       setChroma(true);
       if (typeof window.__syncJobsPreview === 'function') window.__syncJobsPreview();
+      // Re-enable hover fades once the instant swap has been painted.
+      clearTimeout(list._switchTimer);
+      list._switchTimer = setTimeout(() => list.classList.remove('is-switching'), 200);
     }
 
     // Hover on a link updates selection + subtitle (same as keyboard)
@@ -3127,8 +3177,7 @@
     function growGrass() {
       blades.forEach((blade, i) => {
         const delay = 20 + i * 16;
-        const tilt = getComputedStyle(blade).getPropertyValue('--tilt') || '0deg';
-        const skew = getComputedStyle(blade).getPropertyValue('--skew') || '0deg';
+        const { tilt, skew } = bladeShape[i];
         blade.style.transition = 'none';
         blade.style.opacity = '0';
         blade.style.transform = `scaleY(0) rotate(${tilt}) skewX(${skew})`;
@@ -3147,8 +3196,7 @@
     function retractGrass() {
       blades.forEach((blade, i) => {
         const delay = i * 10;
-        const tilt = getComputedStyle(blade).getPropertyValue('--tilt') || '0deg';
-        const skew = getComputedStyle(blade).getPropertyValue('--skew') || '0deg';
+        const { tilt, skew } = bladeShape[i];
         blade.style.transition =
           `transform 500ms cubic-bezier(0.4, 0, 0.2, 1) ${delay}ms,` +
           `opacity 200ms ease ${delay + 160}ms`;
@@ -3221,9 +3269,11 @@
         icon.style.transition = 'none';
         setIconTransform(icon, 0, 0, 1, 0, iconTravelRot(icon));
       });
-      void buildWorld.offsetWidth;
-      buildIcons.forEach((icon) => {
-        const { dx, dy } = getExitOffset(icon, buildWorld);
+      // Measure every icon first, then write — interleaving reads and
+      // writes forced a layout per icon.
+      const offsets = buildIcons.map((icon) => getExitOffset(icon, buildWorld));
+      buildIcons.forEach((icon, i) => {
+        const { dx, dy } = offsets[i];
         icon.dataset.exitX = dx;
         icon.dataset.exitY = dy;
         setIconTransform(icon, dx, dy, 0.85, 0, iconTravelRot(icon));
@@ -3295,6 +3345,7 @@
       }
 
       if (name === 'build') {
+        loadBuildIcons();
         if (!buildIcons[0].dataset.exitX) prepareIconsOffCard();
         animateIconsIn();
       } else {
@@ -3330,6 +3381,7 @@
       next.classList.add('active');
 
       setAmbient(name);
+      bootEffectsPending = false;
       activateWorldEffects(name);
       if (name !== 'work' && typeof window.__stopJobsPreview === 'function') {
         window.__stopJobsPreview();
@@ -3436,7 +3488,20 @@
     {
       const startName = PORTALS[index] || PORTALS[0] || 'life';
       setAmbient(startName);
-      activateWorldEffects(startName);
+      // While the swirl covers the portal, the world's entrance animation
+      // (sun + grass, icon fly-in) would be invisible and would compete with
+      // the swirl for frames — start it as the portal opens instead.
+      if (document.getElementById('portalIntro')) {
+        window.setTimeout(() => {
+          if (bootEffectsPending) {
+            bootEffectsPending = false;
+            activateWorldEffects(startName);
+          }
+        }, PORTAL_INTRO_REVEAL_MS);
+      } else {
+        bootEffectsPending = false;
+        activateWorldEffects(startName);
+      }
       syncPortalHash(startName);
       if (startName !== 'work' && typeof window.__stopJobsPreview === 'function') {
         window.__stopJobsPreview();
@@ -4094,8 +4159,20 @@
         };
       }
 
+      const commerceWorld = canvas.closest('.world');
+
       function draw() {
         if (width < 1 || height < 1) {
+          requestAnimationFrame(draw);
+          return;
+        }
+
+        // Skip rendering while BusinessOS is hidden (still visible while
+        // fading out); keep the rotation clock moving so it resumes in step.
+        if (commerceWorld && !commerceWorld.classList.contains('active') &&
+            !commerceWorld.classList.contains('exit-left') &&
+            !commerceWorld.classList.contains('exit-right')) {
+          rotation += 0.0018;
           requestAnimationFrame(draw);
           return;
         }
