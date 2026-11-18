@@ -694,7 +694,7 @@
       min-height: 520px;
       border: var(--portal-border) solid rgba(255, 255, 255, 0.14);
       box-shadow: none;
-      transition: border-color 0.45s ease, filter 0.45s ease;
+      transition: border-color 0.45s ease, box-shadow 0.45s ease;
     }
 
     @media (max-width: 768px) {
@@ -722,8 +722,8 @@
 
     .portal.life-active {
       border-color: transparent;
-      filter: drop-shadow(0 0 4px rgba(14, 165, 233, 0.3))
-              drop-shadow(0 0 8px rgba(14, 165, 233, 0.14));
+      box-shadow: 0 0 4px rgba(14, 165, 233, 0.3),
+                  0 0 8px rgba(14, 165, 233, 0.14);
       background:
         linear-gradient(transparent, transparent) padding-box,
         linear-gradient(
@@ -745,20 +745,20 @@
 
     .portal.build-active {
       border-color: rgba(134, 239, 172, 0.45);
-      filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.28))
-              drop-shadow(0 0 8px rgba(34, 197, 94, 0.12));
+      box-shadow: 0 0 4px rgba(34, 197, 94, 0.28),
+                  0 0 8px rgba(34, 197, 94, 0.12);
     }
 
     .portal.work-active {
       border-color: rgba(255, 255, 255, 0.12);
-      filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.12))
-              drop-shadow(0 0 8px rgba(255, 255, 255, 0.06));
+      box-shadow: 0 0 4px rgba(255, 255, 255, 0.12),
+                  0 0 8px rgba(255, 255, 255, 0.06);
     }
 
     .portal.commerce-active {
       border-color: rgba(253, 186, 116, 0.5);
-      filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.28))
-              drop-shadow(0 0 8px rgba(249, 115, 22, 0.12));
+      box-shadow: 0 0 4px rgba(249, 115, 22, 0.28),
+                  0 0 8px rgba(249, 115, 22, 0.12);
     }
 
     /* ============================================================
@@ -1659,11 +1659,18 @@
       position: absolute;
       inset: 0;
       background: rgba(8, 12, 20, 0.28);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      /* backdrop-filter is applied only while the guide is warmed up /
+         showing (.is-ready). A permanent full-card backdrop-filter layer
+         makes iOS WebKit stop repainting everything underneath it
+         (canvas, transitions, text) — that froze the mobile animations. */
       opacity: 0.001;
       transform: translateZ(0);
       transition: opacity 0.32s ease;
+    }
+
+    .portal-guide.is-ready .portal-guide-glass {
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
     }
 
     .portal-guide.is-on .portal-guide-glass {
@@ -2743,7 +2750,7 @@
         guide.classList.add('is-out');
         guide.classList.remove('is-play');
         later(() => {
-          guide.classList.remove('is-on', 'is-out');
+          guide.classList.remove('is-on', 'is-out', 'is-ready');
           guide.setAttribute('aria-hidden', 'true');
           showHint();
         }, fadeMs);
@@ -2752,6 +2759,13 @@
       function playGuide() {
         clearGuideTimers();
         guide.classList.remove('is-on', 'is-out', 'is-play');
+        // Warm the backdrop-blur layer for a beat before fading in (avoids
+        // the blur "pop"), but only now — never leave it on while idle.
+        if (!guide.classList.contains('is-ready')) {
+          guide.classList.add('is-ready');
+          later(playGuide, 60);
+          return;
+        }
         void guide.offsetWidth;
         guide.classList.add('is-ready', 'is-on');
         guide.setAttribute('aria-hidden', 'false');
@@ -2765,7 +2779,6 @@
         }, fadeInMs);
       }
 
-      guide.classList.add('is-ready');
       if (SHOW_INSTRUCTIONS_ON_LOAD) later(playGuide, loadDelayMs);
       else showHint();
 
