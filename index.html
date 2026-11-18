@@ -1100,13 +1100,15 @@
 
     /* Jobs / Hire marketplace preview: hide CSS pulse dots */
     .world.work.jobs-preview::before,
-    .world.work.hire-preview::before {
+    .world.work.hire-preview::before,
+    .world.work.career-preview::before {
       animation: none !important;
       opacity: 0 !important;
     }
 
     /* Hire camera draws the grid on canvas so it pans/zooms with the dots */
-    .world.work.hire-preview {
+    .world.work.hire-preview,
+    .world.work.career-preview {
       background-image: none;
     }
 
@@ -1122,7 +1124,8 @@
     }
 
     .world.work.jobs-preview #jobsMarket,
-    .world.work.hire-preview #jobsMarket {
+    .world.work.hire-preview #jobsMarket,
+    .world.work.career-preview #jobsMarket {
       opacity: 1;
     }
 
@@ -1401,6 +1404,7 @@
       outline: none;
     }
 
+    .world.work .links a.is-autoplay,
     .world.work .links a.is-selected {
       /* background: rgba(30, 254, 18, 0.06);
       border-color: #29eb463b; */
@@ -2447,8 +2451,8 @@
         </div>
         <div class="links">
           <a href="https://jobs.briancrink.com" data-subtitle="Open Roles and Market">Jobs</a>
-          <a href="https://hire.briancrink.com" data-subtitle="Available For Hire">Hire</a>
           <a href="https://career.briancrink.com" data-subtitle="Career Path and Roles">Career</a>
+          <a href="https://hire.briancrink.com" data-subtitle="Available For Hire">Hire</a>
         </div>
       </section>
 
@@ -3696,10 +3700,12 @@
 
       function startJobsPreview() {
         if (mode === 'jobs') return;
+        const keepDots = mode === 'career';   // Career -> Jobs keeps the same market
         workWorld.classList.add('jobs-preview');
-        workWorld.classList.remove('hire-preview');
+        workWorld.classList.remove('hire-preview', 'career-preview');
+        career = null;
         resize();
-        dots = [];
+        if (!keepDots) dots = [];
         frame = 0;
         nextSpawnAt = 20;
         nextTurnoverAt = 0;
@@ -3712,7 +3718,8 @@
       function startHirePreview() {
         if (mode === 'hire') return;
         workWorld.classList.add('hire-preview');
-        workWorld.classList.remove('jobs-preview');
+        workWorld.classList.remove('jobs-preview', 'career-preview');
+        career = null;
         resize();
         if (!active) {
           dots = [];
@@ -3778,9 +3785,32 @@
         mode = 'off';
         workWorld.classList.remove('jobs-preview');
         workWorld.classList.remove('hire-preview');
+        workWorld.classList.remove('career-preview');
+        career = null;
         dots = [];
         resetCamera();
         ctx.clearRect(0, 0, width, height);
+      }
+
+      function startCareerPreview() {
+        if (mode === 'career') return;
+        workWorld.classList.add('career-preview');
+        workWorld.classList.remove('jobs-preview', 'hire-preview');
+        resize();
+        if (!active) {
+          dots = [];
+          frame = 0;
+        }
+        if (!raf) loop();
+        active = true;
+        mode = 'career';
+        resetCamera();
+        // Hire fades its chosen dot out on the canvas; bring every job back.
+        dots.forEach((d) => {
+          d.canvasFade = false;
+          if (d.state === 'pulsing') d.alpha = 1;
+        });
+        career = { phase: 'seed', t: 0, D: 0, Dw: 0, k: 0, alpha: 1 };
       }
 
       // dt = elapsed time in 60fps-frame units, so every rate below keeps its
@@ -3982,6 +4012,313 @@
         }
       }
 
+
+      /* ==========================================================
+         Career — career paths through the job market, then the
+         "real" path traced in 3D.
+         1. Gray path(s) start at the left edge and travel from job dot
+            to job dot. Every segment moves right (never back) and at
+            most MAX_DY rows up/down; at a dot a path may split. With no
+            dot in reach a path advances along its row, so every path
+            reaches the right edge.
+         2. A single white path retraces one complete gray path. While
+            it travels, the grid tilts into an X/Y/Z graph and the white
+            path rises off the plane (X = time, Z = growth).
+         3. At the right edge the graph flattens back to 2D, the lines
+            fade, the dots stay, and the cycle repeats.
+         ========================================================== */
+      const CAREER = {
+        SEED_DOTS: 34,        // seed the market if Career is opened first
+        MIN_DOTS: 12,         // enough existing Jobs dots to start right away
+        LOOK_COLS: 6,         // how far right a path looks for its next job
+        MAX_DY: 2,            // max rows up/down per step
+        MAX_PATHS: 6,         // cap on simultaneous gray branches
+        SPLIT_P: 0.42,        // chance a path splits at a job dot
+        GRAY_SPEED: 230,      // px / s
+        WHITE_SPEED: 150,     // px / s
+        HOLD_MS: 450,         // pause between gray and white
+        TILT_MS: 1400,        // 2D <-> 3D rotation
+        CLEAR_MS: 700,        // fade the lines before looping
+        PITCH: 58,            // 3D view angles (degrees)
+        YAW: -18
+      };
+      let career = null;
+
+      function careerEase(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      function buildCareerTree() {
+        // Paths stay below the title/subtitle area.
+        const minRow = Math.max(1, Math.ceil(rows * 0.2));
+        const maxRow = Math.max(minRow, rows - 1);
+        const live = dots.filter((d) => d.state !== 'fading' && d.row >= minRow && d.row <= maxRow);
+        const edgeCol = width / GRID;
+        // Start on the left edge, level with a job near the left side if
+        // there is one (so the first step is a real move to a dot).
+        const bandLo = Math.round(rows * 0.38), bandHi = Math.round(rows * 0.7);
+        let startRow = Math.round(bandLo + Math.random() * (bandHi - bandLo));
+        const leftJobs = live.filter((d) => d.col >= 1 && d.col <= 4 && d.row >= bandLo && d.row <= bandHi);
+        if (leftJobs.length) {
+          startRow = leftJobs[Math.floor(Math.random() * leftJobs.length)].row;
+          startRow += Math.round((Math.random() - 0.5) * 2);   // within MAX_DY of it
+        }
+        startRow = Math.max(minRow, Math.min(maxRow, startRow));
+
+        const root = { col: 0, row: startRow, dot: null, parent: null, dist: 0, children: [] };
+        const nodes = [root];
+        const leaves = [];
+        const used = new Set();
+        const queue = [root];
+
+        while (queue.length) {
+          const n = queue.shift();
+          if (n.col >= edgeCol - 0.001) { leaves.push(n); continue; }
+
+          const cands = live.filter((d) =>
+            d.col > n.col && d.col <= n.col + CAREER.LOOK_COLS &&
+            Math.abs(d.row - n.row) <= CAREER.MAX_DY && !used.has(d));
+          cands.sort((a, b) =>
+            (a.col - b.col) || (Math.abs(a.row - n.row) - Math.abs(b.row - n.row)));
+
+          let targets;
+          if (!cands.length) {
+            // No job in reach: keep advancing along the row.
+            targets = [{ col: Math.min(edgeCol, n.col + 3), row: n.row, dot: null }];
+          } else {
+            const first = cands[(Math.random() < 0.7 || cands.length < 2) ? 0 : 1];
+            targets = [first];
+            const pathsNow = queue.length + leaves.length + 1;
+            if (n.dot && cands.length >= 2 && pathsNow < CAREER.MAX_PATHS && Math.random() < CAREER.SPLIT_P) {
+              // Branch: prefer a second job heading the other way vertically.
+              const dir = Math.sign(first.row - n.row);
+              const other = cands.find((d) => d !== first && Math.sign(d.row - n.row) !== dir) ||
+                            cands.find((d) => d !== first);
+              if (other) targets.push(other);
+            }
+            targets = targets.map((d) => ({ col: d.col, row: d.row, dot: d }));
+          }
+
+          for (const t of targets) {
+            if (t.dot) used.add(t.dot);
+            const child = { col: t.col, row: t.row, dot: t.dot, parent: n, children: [] };
+            child.dist = n.dist + Math.hypot((t.col - n.col) * GRID, (t.row - n.row) * GRID);
+            n.children.push(child);
+            nodes.push(child);
+            queue.push(child);
+          }
+        }
+
+        // The "real" path: one complete root -> right-edge route, never split.
+        const leaf = leaves[Math.floor(Math.random() * leaves.length)];
+        const path = [];
+        for (let n = leaf; n; n = n.parent) path.unshift(n);
+        const zMax = height * 0.4;
+        let z = 0;
+        const pathZ = path.map((n, i) => {
+          if (i === 0) return 0;
+          const target = zMax * Math.pow((n.col * GRID) / width, 1.1);
+          z = Math.max(0, target * (0.82 + Math.random() * 0.3));
+          return z;
+        });
+
+        return {
+          nodes,
+          maxDist: Math.max(...leaves.map((l) => l.dist)),
+          path,
+          pathZ,
+          pathLen: leaf.dist
+        };
+      }
+
+      function tickCareer(dtMs) {
+        if (mode !== 'career' || !career) return;
+        const c = career;
+        c.t += dtMs;
+
+        if (c.phase === 'seed') {
+          const live = dots.filter((d) => d.state !== 'fading').length;
+          if (live < CAREER.MIN_DOTS || c.seeding) {
+            c.seeding = true;
+            // Emerge a market quickly (a couple of jobs per frame).
+            if (live < CAREER.SEED_DOTS) { spawnDot(); spawnDot(); }
+            if (live >= CAREER.SEED_DOTS && c.t > 900) c.seeding = false;
+            if (c.t > 2500) c.seeding = false;   // grid too small to fill: go anyway
+            return;
+          }
+          if (c.t < 200) return;
+          Object.assign(c, careerNewCycle());
+          return;
+        }
+
+        if (c.phase === 'gray') {
+          c.D += CAREER.GRAY_SPEED * dtMs / 1000;
+          if (c.D >= c.tree.maxDist) { c.D = c.tree.maxDist; c.phase = 'hold'; c.t = 0; }
+        } else if (c.phase === 'hold') {
+          if (c.t >= CAREER.HOLD_MS) { c.phase = 'white'; c.t = 0; c.Dw = 0; }
+        } else if (c.phase === 'white') {
+          c.Dw = Math.min(c.tree.pathLen, c.Dw + CAREER.WHITE_SPEED * dtMs / 1000);
+          c.k = careerEase(Math.min(1, c.t / CAREER.TILT_MS));
+          if (c.Dw >= c.tree.pathLen && c.t >= CAREER.TILT_MS) {
+            c.phase = 'flatten'; c.t = 0;
+          }
+        } else if (c.phase === 'flatten') {
+          c.k = 1 - careerEase(Math.min(1, c.t / CAREER.TILT_MS));
+          if (c.t >= CAREER.TILT_MS) { c.k = 0; c.phase = 'clear'; c.t = 0; }
+        } else if (c.phase === 'clear') {
+          c.alpha = 1 - Math.min(1, c.t / CAREER.CLEAR_MS);
+          if (c.t >= CAREER.CLEAR_MS) {
+            Object.assign(c, careerNewCycle());
+            c.cyclesDone = (c.cyclesDone || 0) + 1;
+          }
+        }
+      }
+
+      function careerNewCycle() {
+        return { phase: 'gray', t: 0, D: 0, Dw: 0, k: 0, alpha: 1, tree: buildCareerTree() };
+      }
+
+      // 2D grid -> tilted X/Y/Z graph. k = 0 is the exact flat grid.
+      function careerProject(x, y, z, k) {
+        if (k <= 0) return { x, y };
+        const a = (CAREER.PITCH * Math.PI / 180) * k;
+        const b = (CAREER.YAW * Math.PI / 180) * k;
+        const X = x - width / 2, Y = y - height / 2;
+        const X1 = X * Math.cos(b) - Y * Math.sin(b);
+        const Y1 = X * Math.sin(b) + Y * Math.cos(b);
+        const Y2 = Y1 * Math.cos(a) - z * Math.sin(a);
+        const Zv = Y1 * Math.sin(a) + z * Math.cos(a);          // toward viewer
+        const F = 1300;
+        const s = (1 + (F / (F - Zv) - 1) * k) * (1 - 0.22 * k);
+        return { x: width / 2 + X1 * s, y: height / 2 + Y2 * s + height * 0.05 * k };
+      }
+
+      function careerLine(p, q) {
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+      }
+
+      function drawCareer() {
+        const c = career;
+        const k = c ? c.k : 0;
+        const P = (x, y, z) => careerProject(x, y, z || 0, k);
+
+        // Grid plane (lifts slightly in 3D so the plane reads).
+        ctx.lineWidth = 1;
+        const g = Math.round(16 + 34 * k);
+        ctx.strokeStyle = `rgba(${g}, ${g}, ${g + 6 * k}, 0.85)`;
+        for (let col = 0; col * GRID <= width + 0.5; col++) {
+          careerLine(P(col * GRID, 0), P(col * GRID, height));
+        }
+        for (let row = 0; row * GRID <= height + 0.5; row++) {
+          careerLine(P(0, row * GRID), P(width, row * GRID));
+        }
+
+        // Axes fade in with the tilt.
+        if (k > 0.01) {
+          const zTop = height * 0.5;
+          const O = P(0, height, 0);
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 * k})`;
+          ctx.lineWidth = 1.2;
+          const ax = P(width, height, 0), ay = P(0, 0, 0), az = P(0, height, zTop);
+          careerLine(O, ax); careerLine(O, ay); careerLine(O, az);
+          ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * k})`;
+          ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('X', ax.x + 8, ax.y + 2);
+          ctx.fillText('Y', ay.x - 7, ay.y);
+          ctx.fillText('Z', az.x, az.y - 8);
+        }
+
+        const tree = c && c.tree;
+        const alpha = c ? c.alpha : 1;
+        const touched = new Set();
+
+        // Gray career paths.
+        if (tree) {
+          ctx.lineWidth = 1.6;
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = `rgba(150, 160, 176, ${0.8 * alpha})`;
+          const tips = [];
+          for (const n of tree.nodes) {
+            const p = n.parent;
+            if (!p || c.D <= p.dist) continue;
+            const t = Math.min(1, (c.D - p.dist) / Math.max(0.001, n.dist - p.dist));
+            const x0 = p.col * GRID, y0 = p.row * GRID;
+            const x1 = x0 + (n.col * GRID - x0) * t, y1 = y0 + (n.row * GRID - y0) * t;
+            careerLine(P(x0, y0), P(x1, y1));
+            if (t >= 1 && n.dot) touched.add(n.dot);
+            if (t < 1) tips.push(P(x1, y1));
+          }
+          ctx.fillStyle = `rgba(205, 214, 228, ${0.9 * alpha})`;
+          for (const tp of tips) {
+            ctx.beginPath(); ctx.arc(tp.x, tp.y, 2.2, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+
+        // Job dots (on the plane).
+        for (const d of dots) {
+          const p = P(d.col * GRID, d.row * GRID, 0);
+          const a = Math.max(0, Math.min(1, d.alpha));
+          const hit = touched.has(d);
+          const r = Math.max(1.2, 2.15 * d.scale) * (hit ? 1.35 : 1);
+          ctx.fillStyle = hit
+            ? `rgba(225, 232, 242, ${0.9 * a})`
+            : `rgba(180, 190, 205, ${0.55 * a})`;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // White "real" path, rising off the plane in 3D.
+        if (tree && (c.phase === 'white' || c.phase === 'flatten' || c.phase === 'clear')) {
+          const pts = [];
+          const path = tree.path;
+          for (let i = 0; i < path.length; i++) {
+            const n = path[i];
+            const pt = { x: n.col * GRID, y: n.row * GRID, z: tree.pathZ[i] * k };
+            if (n.dist <= c.Dw) { pts.push(pt); continue; }
+            const pn = path[i - 1];
+            const t = (c.Dw - pn.dist) / Math.max(0.001, n.dist - pn.dist);
+            const prev = pts[pts.length - 1];
+            pts.push({ x: prev.x + (pt.x - prev.x) * t, y: prev.y + (pt.y - prev.y) * t, z: prev.z + (pt.z - prev.z) * t });
+            break;
+          }
+          const proj = pts.map((q) => P(q.x, q.y, q.z));
+
+          // Drop lines from the path to its position on the plane.
+          if (k > 0.01) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.22 * k * alpha})`;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 3]);
+            for (let i = 1; i < pts.length; i++) {
+              careerLine(proj[i], P(pts[i].x, pts[i].y, 0));
+            }
+            ctx.setLineDash([]);
+          }
+
+          if (proj.length > 1) {
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            // soft glow pass, then the crisp line
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.18 * alpha})`;
+            ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(proj[0].x, proj[0].y);
+            for (let i = 1; i < proj.length; i++) ctx.lineTo(proj[i].x, proj[i].y);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * alpha})`;
+            ctx.lineWidth = 2.2;
+            ctx.stroke();
+            if (c.phase === 'white' && c.Dw < tree.pathLen) {
+              const h = proj[proj.length - 1];
+              ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+              ctx.beginPath(); ctx.arc(h.x, h.y, 3, 0, Math.PI * 2); ctx.fill();
+            }
+          }
+        }
+      }
+
       function loop(now) {
         raf = requestAnimationFrame(loop);
         now = now || performance.now();
@@ -3993,10 +4330,16 @@
         if (Math.abs(rect.width - width) > 1 || Math.abs(rect.height - height) > 1) resize();
         tickMarket();
         tickHireCamera();
+        tickCareer(dt * 1000 / 60);
+        tickAutoplay(dt * 1000 / 60);
         updateDots();
         ctx.clearRect(0, 0, width, height);
-        if (mode === 'hire') drawGrid();
-        drawDots();
+        if (mode === 'career') {
+          drawCareer();
+        } else {
+          if (mode === 'hire') drawGrid();
+          drawDots();
+        }
       }
 
       function jobsLinkActive() {
@@ -4019,22 +4362,111 @@
         return false;
       }
 
+
+      /* ==========================================================
+         Mobile autoplay — touch screens have no hover, so while
+         CareerOS is open with no link chosen, the grid plays the
+         whole story on a loop: Jobs -> one Career cycle -> Hire.
+         The playing link gets a light highlight and the subtitle
+         follows it. Choosing a link takes over; desktop is unchanged.
+         ========================================================== */
+      const autoMQ = window.matchMedia ? window.matchMedia('(hover: none) and (pointer: coarse)') : null;
+      const AUTO_JOBS_MS = 8000;        // let the market fill before Career
+      const AUTO_HIRE_HOLD_MS = 3000;   // hold the hired seat before looping
+      const AUTO_HIRE_MAX_MS = 14000;   // safety net
+      let autoplay = null;
+      const workSubtitle = workWorld.querySelector('.subtitle');
+      const workSubtitleDefault = workSubtitle ? workSubtitle.textContent : '';
+
+      function autoLink(re) {
+        return [...workWorld.querySelectorAll('.links a')].find((a) => re.test(a.textContent.trim()));
+      }
+
+      function autoShow(re, restoreSubtitle) {
+        workWorld.querySelectorAll('.links a.is-autoplay').forEach((a) => a.classList.remove('is-autoplay'));
+        const a = re && autoLink(re);
+        if (a) {
+          a.classList.add('is-autoplay');
+          if (workSubtitle) workSubtitle.textContent = a.getAttribute('data-subtitle') || a.textContent.trim();
+        } else if (restoreSubtitle && workSubtitle) {
+          workSubtitle.textContent = workSubtitleDefault;
+        }
+      }
+
+      function autoStage(stage) {
+        autoplay.stage = stage;
+        autoplay.t = 0;
+        autoplay.holdT = 0;
+        if (stage === 'jobs') { autoShow(/^jobs$/i); startJobsPreview(); }
+        else if (stage === 'career') { autoShow(/^career$/i); startCareerPreview(); }
+        else { autoShow(/^hire$/i); startHirePreview(); }   // subtitle set first: Hire seats its beacon beside it
+      }
+
+      function startAutoplay() {
+        if (autoplay) return;
+        autoplay = { stage: null, t: 0, holdT: 0 };
+        autoStage('jobs');
+      }
+
+      function stopAutoplay(restoreSubtitle) {
+        if (!autoplay) return;
+        autoplay = null;
+        autoShow(null, restoreSubtitle);
+      }
+
+      function tickAutoplay(dtMs) {
+        if (!autoplay) return;
+        autoplay.t += dtMs;
+        if (autoplay.stage === 'jobs') {
+          if (autoplay.t >= AUTO_JOBS_MS) autoStage('career');
+        } else if (autoplay.stage === 'career') {
+          if (career && career.cyclesDone >= 1) autoStage('hire');
+        } else if (autoplay.stage === 'hire') {
+          if (hirePhase === 'hold') autoplay.holdT += dtMs;
+          if (autoplay.holdT >= AUTO_HIRE_HOLD_MS || autoplay.t >= AUTO_HIRE_MAX_MS) autoStage('jobs');
+        }
+      }
+
+      function careerLinkActive() {
+        const links = workWorld.querySelectorAll('.links a');
+        for (const a of links) {
+          if (/^career$/i.test(a.textContent.trim()) || /career\.briancrink/i.test(a.href || '')) {
+            if (a.classList.contains('is-selected') || a.matches(':hover')) return true;
+          }
+        }
+        return false;
+      }
+
       function syncJobsPreview() {
         const workActive = workWorld.classList.contains('active');
         if (!workActive) {
+          stopAutoplay(true);
           stopJobsPreview();
           return;
         }
-        if (hireLinkActive()) startHirePreview();
-        else if (jobsLinkActive()) startJobsPreview();
-        else stopJobsPreview();
+        const manual = hireLinkActive() ? 'hire'
+          : jobsLinkActive() ? 'jobs'
+          : careerLinkActive() ? 'career'
+          : null;
+        if (manual) {
+          stopAutoplay(false);   // keep the chosen link's subtitle
+          if (manual === 'hire') startHirePreview();
+          else if (manual === 'jobs') startJobsPreview();
+          else startCareerPreview();
+        } else if (autoMQ && autoMQ.matches) {
+          startAutoplay();
+        } else {
+          stopJobsPreview();
+        }
       }
 
       workWorld.querySelectorAll('.links a').forEach((a) => {
         a.addEventListener('mouseenter', () => {
+          stopAutoplay(false);
           const label = (a.textContent || '').trim();
           if (/^hire$/i.test(label) || /hire\.briancrink/i.test(a.href || '')) startHirePreview();
           else if (/jobs/i.test(label)) startJobsPreview();
+          else if (/^career$/i.test(label) || /career\.briancrink/i.test(a.href || '')) startCareerPreview();
           else stopJobsPreview();
         });
         a.addEventListener('mouseleave', () => {
@@ -4043,7 +4475,13 @@
       });
 
       window.__syncJobsPreview = syncJobsPreview;
-      window.__stopJobsPreview = stopJobsPreview;
+      window.__stopJobsPreview = () => {
+        stopAutoplay(true);
+        stopJobsPreview();
+      };
+
+      // Opened straight onto CareerOS (e.g. #career): start autoplay on touch.
+      if (workWorld.classList.contains('active')) syncJobsPreview();
 
       window.addEventListener('resize', () => {
         if (active) resize();
