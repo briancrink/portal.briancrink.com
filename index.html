@@ -2016,35 +2016,39 @@
       }
     }
 
-    /* Globe: on hover the meridians turn about the axis like a real globe
-       (latitude lines stay put). A meridian at angle θ is the full circle
-       squashed to |cos θ|, so each one eases 1 → 0 → 1 per half turn;
-       two meridians 90° apart make the spin continuous. */
-    #worlds-toggle .globe-meridian {
-      transform-box: fill-box;
-      transform-origin: center;
-      animation: globeMeridian 5s infinite;     /* 10s per full turn */
-      animation-play-state: paused;             /* rests mid-turn; resumes where it left off */
+    /* Dot-matrix globe: a sphere of coloured dots (one quarter per portal
+       world) drawn by JS; on hover it spins about its axis like a real globe. */
+    #worlds-toggle .dot-globe { width: 18px; height: 18px; overflow: visible; }
+    /* Hover: the ring turns into the portal border's chromatic swirl */
+    #worlds-toggle .globe-chroma {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      padding: 2px;
+      z-index: 2;
+      pointer-events: none;
+      background: conic-gradient(from 0deg, #fff, #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #fff);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.55)) drop-shadow(0 0 6px rgba(131, 56, 236, 0.6));
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      animation: portalSpinT 5.5s linear infinite;
+      animation-play-state: paused;
     }
-    #worlds-toggle .globe-meridian:nth-of-type(1) { animation-delay: -1.8s; }   /* θ ≈ 65° → the classic narrow meridian at rest */
-    #worlds-toggle .globe-meridian:nth-of-type(2) { animation-delay: -4.3s; }   /* θ ≈ 155° */
-    @keyframes globeMeridian {
-      0%   { transform: scaleX(1); animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0); }
-      50%  { transform: scaleX(0.001); animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1); }
-      100% { transform: scaleX(1); }
-    }
-
     @media (hover: hover) and (pointer: fine) {
-      #worlds-toggle:hover { transform: none; }   /* no tilt: it spins instead */
-      #worlds-toggle:hover .globe-meridian { animation-play-state: running; }
+      #worlds-toggle:hover { transform: none; opacity: 1; }   /* no tilt or dimming: it glows instead */
+      #worlds-toggle:hover .globe-chroma { opacity: 1; animation-play-state: running; }
     }
+    #worlds-toggle:focus-visible .globe-chroma { opacity: 1; animation-play-state: running; }
 
     @media (prefers-reduced-motion: reduce) {
       .guide-hint::before,
       .toggle-btn::before {
         animation: none;
       }
-      #worlds-toggle .globe-meridian { animation-play-state: paused !important; }
     }
 
     .guide-gesture {
@@ -2359,12 +2363,8 @@
               </svg>
             </button>
             <button class="toggle-btn" id="worlds-toggle" type="button" aria-label="Show all portals" aria-pressed="false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="8.6"/>
-                <ellipse class="globe-meridian" cx="12" cy="12" rx="8.6" ry="8.6"/>
-                <ellipse class="globe-meridian" cx="12" cy="12" rx="8.6" ry="8.6"/>
-                <path d="M3.7 9.1h16.6M3.7 14.9h16.6"/>
-              </svg>
+              <span class="globe-chroma" aria-hidden="true"></span>
+              <svg class="dot-globe" viewBox="0 0 24 24" aria-hidden="true"></svg>
             </button>
             <button class="toggle-btn" id="theme-toggle" type="button" aria-label="Dark mode">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 14.35A9 9 0 1 1 9.65 3 7.15 7.15 0 0 0 21 14.35z"/></svg>
@@ -5795,6 +5795,65 @@
         btn.addEventListener('pointercancel', release);
         btn.addEventListener('pointerleave', release);
       });
+    })();
+
+    /* Dot-matrix globe icon: dots on latitude rings, coloured by longitude
+       quarter (LifeOS blue, BusinessOS orange, DevOS green, CareerOS violet).
+       Hover spins it about its tilted axis, easing up to speed and back down. */
+    (function initDotGlobe() {
+      const btn = document.getElementById('worlds-toggle');
+      const svg = btn && btn.querySelector('.dot-globe');
+      if (!svg) return;
+      const NS = 'http://www.w3.org/2000/svg';
+      const R = 9.2, C = 12;
+      const TILT = 0.36;                        // axis leans toward the viewer (~20°)
+      const COLORS = ['#38bdf8', '#f97316', '#22c55e', '#a78bfa'];
+      const SPEED = (Math.PI * 2) / 9000;       // a full turn every 9s at speed
+      const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const pts = [];
+      const add = (lat, lon) => {
+        const el = document.createElementNS(NS, 'circle');
+        const q = ((lon % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        el.setAttribute('fill', lat === Math.PI / 2 || lat === -Math.PI / 2 ? '#e2e8f0' : COLORS[Math.floor(q / (Math.PI / 2)) % 4]);
+        svg.appendChild(el);
+        pts.push({ lat, lon, el });
+      };
+      [-56, -19, 19, 56].forEach((d) => {
+        const lat = d * Math.PI / 180;
+        const count = Math.max(6, Math.round(11 * Math.cos(lat)));
+        for (let k = 0; k < count; k++) add(lat, (k / count) * Math.PI * 2 + (d / 19) * 0.2);
+      });
+      add(Math.PI / 2, 0); add(-Math.PI / 2, 0);
+
+      let spin = 0.5;
+      function draw() {
+        const ct = Math.cos(TILT), st = Math.sin(TILT);
+        for (const p of pts) {
+          const cl = Math.cos(p.lat), lo = p.lon + spin;
+          const x = cl * Math.sin(lo), y0 = Math.sin(p.lat), z0 = cl * Math.cos(lo);
+          const y = y0 * ct - z0 * st, z = y0 * st + z0 * ct;    // lean the axis toward the viewer
+          const front = (z + 1) / 2;                              // 0 back … 1 front
+          const el = p.el;
+          el.setAttribute('cx', (C + x * R).toFixed(2));
+          el.setAttribute('cy', (C - y * R).toFixed(2));
+          el.setAttribute('r', (0.25 + 0.63 * front).toFixed(2));   // ~1px smaller than before
+          el.setAttribute('opacity', (z < 0 ? 0.06 + 0.2 * front : 0.5 + 0.5 * front).toFixed(2));
+        }
+      }
+      draw();
+      if (calm) return;
+
+      // Always turning, slowly; eases up to speed on load.
+      let v = 0, last = 0;
+      function tick(now) {
+        const dt = Math.min(50, now - (last || now)); last = now;
+        v += (SPEED - v) * Math.min(1, dt / 600);
+        spin += v * dt;
+        draw();
+        requestAnimationFrame(tick);   // rAF pauses by itself in hidden tabs
+      }
+      requestAnimationFrame(tick);
     })();
 
     /* ============================================================
