@@ -3811,6 +3811,8 @@
           if (d.state === 'pulsing') d.alpha = 1;
         });
         career = { phase: 'seed', t: 0, D: 0, Dw: 0, k: 0, alpha: 1 };
+        heat = [];
+        heatNextIn = 400;
       }
 
       // dt = elapsed time in 60fps-frame units, so every rate below keeps its
@@ -4015,19 +4017,24 @@
 
       /* ==========================================================
          Career — career paths through the job market, then the
-         "real" path traced in 3D.
-         1. Gray path(s) start at the left edge and travel from job dot
-            to job dot. Every segment moves right (never back) and at
-            most MAX_DY rows up/down; at a dot a path may split. With no
-            dot in reach a path advances along its row, so every path
+         "real" path traced through a 3-axis graph.
+         1. Gray path(s) start at the left edge and travel job dot to
+            job dot. Every step goes at most MAX_DY rows up/down, then
+            right — never back. At a dot a path may split. With no dot
+            in reach a path advances along its row, so every path
             reaches the right edge.
+            ROUTE 'grid': paths follow the grid lines as stair steps
+            (up/down = rank change, right = time). 'diagonal': straight
+            segments between dots.
          2. A single white path retraces one complete gray path. While
-            it travels, the grid tilts into an X/Y/Z graph and the white
-            path rises off the plane (X = time, Z = growth).
-         3. At the right edge the graph flattens back to 2D, the lines
+            it travels the graph rotates into 3D — X time (blue), Y rank
+            (green), Z domain (pink) — with grid slices layered along Z,
+            and the white path drifts through Z (domain shifts).
+         3. At the right edge the graph rotates back to 2D, the lines
             fade, the dots stay, and the cycle repeats.
          ========================================================== */
       const CAREER = {
+        ROUTE: 'grid',        // 'grid' (stair steps on the grid) | 'diagonal'
         SEED_DOTS: 34,        // seed the market if Career is opened first
         MIN_DOTS: 12,         // enough existing Jobs dots to start right away
         LOOK_COLS: 6,         // how far right a path looks for its next job
@@ -4035,17 +4042,108 @@
         MAX_PATHS: 6,         // cap on simultaneous gray branches
         SPLIT_P: 0.42,        // chance a path splits at a job dot
         GRAY_SPEED: 230,      // px / s
-        WHITE_SPEED: 150,     // px / s
+        WHITE_SPEED: 120,     // px / s (measured in 3D, layer hops included)
         HOLD_MS: 450,         // pause between gray and white
-        TILT_MS: 1400,        // 2D <-> 3D rotation
+        TILT_MS: 1400,        // 3D -> 2D rotation back at the end
+        HOLD3D_MS: 800,       // hold the finished 3D path before rotating back
         CLEAR_MS: 700,        // fade the lines before looping
-        PITCH: 58,            // 3D view angles (degrees)
-        YAW: -18
+        YAW: -0.85,           // 3D: final turn about the vertical axis (rad, ~49deg) —
+                              //     the camera orbits there progressively as the white path advances
+        TILT: -0.4,           // 3D: final view from slightly above (rad)
+        DEPTH: 0.7,           // Z depth of the graph, x card width
+        SLICES: 4,            // grid layers behind the main grid
+        AXIS_X: '125, 211, 252',   // X time   (blue)
+        AXIS_Y: '134, 239, 172',   // Y rank   (green)
+        AXIS_Z: '249, 168, 212',   // Z domain (pink)
+        // Axis labels (edit freely). LAYERS: front grid first, deepest last —
+        // the white path ends on the last one.
+        YEARS: ['Now', '+2y', '+4y', '+6y', '+8y'],
+        RANKS: ['IC', 'Senior', 'Lead', 'Principal', 'Exec'],
+        LAYERS: ['Engineering', 'Platform', 'Product', 'Business', 'Founder'],
+        // Demand heat map: soft green areas that emerge and fade on the grid.
+        HEAT_RGB: '34, 197, 94',
+        HEAT_MAX: 4,              // at most this many at once
+        HEAT_EVERY: [1100, 2600], // ms between new hot spots (random in range)
+        HEAT_LIFE: [4200, 6800],  // ms each hot spot lasts
+        BEACON_RGB: '39, 201, 63' // Hire beacon green
       };
       let career = null;
 
+      /* ---- demand heat map ---- */
+      let heat = [];
+      let heatNextIn = 400;
+      function heatAlpha(h) {
+        return Math.max(0, Math.min(1, h.age / 1000, (h.life - h.age) / 1500));
+      }
+      function tickHeat(dtMs) {
+        heat.forEach((h) => { h.age += dtMs; });
+        heat = heat.filter((h) => h.age < h.life);
+        heatNextIn -= dtMs;
+        if (heatNextIn <= 0 && heat.length < CAREER.HEAT_MAX) {
+          const [e0, e1] = CAREER.HEAT_EVERY, [l0, l1] = CAREER.HEAT_LIFE;
+          heat.push({
+            x: width * (0.08 + Math.random() * 0.84),
+            y: height * (0.26 + Math.random() * 0.66),
+            r: GRID * (2.5 + Math.random() * 2),
+            age: 0,
+            life: l0 + Math.random() * (l1 - l0)
+          });
+          heatNextIn = e0 + Math.random() * (e1 - e0);
+        }
+      }
+      function isHot(d) {
+        const x = d.col * GRID, y = d.row * GRID;
+        return heat.some((h) => heatAlpha(h) > 0.35 && Math.hypot(x - h.x, y - h.y) < h.r * 0.85);
+      }
+
       function careerEase(t) {
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      // Points (px) of one step from (c0,r0) to (c1,r1), start included.
+      function careerStepPts(c0, r0, c1, r1) {
+        const a = { x: c0 * GRID, y: r0 * GRID };
+        const b = { x: c1 * GRID, y: r1 * GRID };
+        if (CAREER.ROUTE === 'grid' && r0 !== r1 && c0 !== c1) {
+          return [a, { x: a.x, y: b.y }, b];   // up/down first, then right
+        }
+        return [a, b];
+      }
+
+      function polyLen(pts) {
+        let L = 0;
+        for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        return L;
+      }
+
+      // The first `len` px of a polyline (z interpolated if present).
+      function polyPartial(pts, len) {
+        const out = [pts[0]];
+        let left = len;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i];
+          const seg = Math.hypot(b.x - a.x, b.y - a.y);
+          if (left >= seg) { out.push(b); left -= seg; continue; }
+          const t = seg > 0 ? left / seg : 0;
+          out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: (a.z || 0) + ((b.z || 0) - (a.z || 0)) * t });
+          return out;
+        }
+        return out;
+      }
+
+      // The first `len` px of a 3D polyline (x, y, z).
+      function polyPartial3(pts, len) {
+        const out = [pts[0]];
+        let left = len;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i];
+          const seg = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+          if (left >= seg) { out.push(b); left -= seg; continue; }
+          const t = seg > 0 ? left / seg : 0;
+          out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t });
+          return out;
+        }
+        return out;
       }
 
       function buildCareerTree() {
@@ -4054,18 +4152,16 @@
         const maxRow = Math.max(minRow, rows - 1);
         const live = dots.filter((d) => d.state !== 'fading' && d.row >= minRow && d.row <= maxRow);
         const edgeCol = width / GRID;
-        // Start on the left edge, level with a job near the left side if
-        // there is one (so the first step is a real move to a dot).
         const bandLo = Math.round(rows * 0.38), bandHi = Math.round(rows * 0.7);
         let startRow = Math.round(bandLo + Math.random() * (bandHi - bandLo));
         const leftJobs = live.filter((d) => d.col >= 1 && d.col <= 4 && d.row >= bandLo && d.row <= bandHi);
         if (leftJobs.length) {
           startRow = leftJobs[Math.floor(Math.random() * leftJobs.length)].row;
-          startRow += Math.round((Math.random() - 0.5) * 2);   // within MAX_DY of it
+          startRow += Math.round((Math.random() - 0.5) * 2);
         }
         startRow = Math.max(minRow, Math.min(maxRow, startRow));
 
-        const root = { col: 0, row: startRow, dot: null, parent: null, dist: 0, children: [] };
+        const root = { col: 0, row: startRow, dot: null, parent: null, dist: 0, children: [], pts: null };
         const nodes = [root];
         const leaves = [];
         const used = new Set();
@@ -4080,17 +4176,19 @@
             Math.abs(d.row - n.row) <= CAREER.MAX_DY && !used.has(d));
           cands.sort((a, b) =>
             (a.col - b.col) || (Math.abs(a.row - n.row) - Math.abs(b.row - n.row)));
+          // Paths lean toward emerging demand: a nearby job inside a hot
+          // spot is taken first.
+          const hotIdx = cands.slice(0, 3).findIndex(isHot);
+          if (hotIdx > 0) cands.unshift(cands.splice(hotIdx, 1)[0]);
 
           let targets;
           if (!cands.length) {
-            // No job in reach: keep advancing along the row.
             targets = [{ col: Math.min(edgeCol, n.col + 3), row: n.row, dot: null }];
           } else {
             const first = cands[(Math.random() < 0.7 || cands.length < 2) ? 0 : 1];
             targets = [first];
             const pathsNow = queue.length + leaves.length + 1;
             if (n.dot && cands.length >= 2 && pathsNow < CAREER.MAX_PATHS && Math.random() < CAREER.SPLIT_P) {
-              // Branch: prefer a second job heading the other way vertically.
               const dir = Math.sign(first.row - n.row);
               const other = cands.find((d) => d !== first && Math.sign(d.row - n.row) !== dir) ||
                             cands.find((d) => d !== first);
@@ -4101,8 +4199,10 @@
 
           for (const t of targets) {
             if (t.dot) used.add(t.dot);
-            const child = { col: t.col, row: t.row, dot: t.dot, parent: n, children: [] };
-            child.dist = n.dist + Math.hypot((t.col - n.col) * GRID, (t.row - n.row) * GRID);
+            const pts = careerStepPts(n.col, n.row, t.col, t.row);
+            const child = { col: t.col, row: t.row, dot: t.dot, parent: n, children: [], pts };
+            child.len = polyLen(pts);
+            child.dist = n.dist + child.len;
             n.children.push(child);
             nodes.push(child);
             queue.push(child);
@@ -4110,24 +4210,39 @@
         }
 
         // The "real" path: one complete root -> right-edge route, never split.
+        // It moves in all three dimensions: right = time (X), up/down = rank
+        // (Y), and at a few jobs along the way it hops back one layer along
+        // Z (a domain shift), ending on the deepest layer.
         const leaf = leaves[Math.floor(Math.random() * leaves.length)];
-        const path = [];
-        for (let n = leaf; n; n = n.parent) path.unshift(n);
-        const zMax = height * 0.4;
+        const chain = [];
+        for (let n = leaf; n; n = n.parent) chain.unshift(n);
+        const D = width * CAREER.DEPTH;
+        const layerZ = D / CAREER.SLICES;
+        const hopAt = new Set();
+        const stops = chain.length - 1;   // nodes after the root
+        const hops = Math.min(CAREER.SLICES, Math.max(1, stops - 1));
+        for (let h = 1; h <= hops; h++) hopAt.add(Math.max(1, Math.round((stops * h) / (hops + 1))));
+        const path = [{ x: chain[0].col * GRID, y: chain[0].row * GRID, z: 0 }];
         let z = 0;
-        const pathZ = path.map((n, i) => {
-          if (i === 0) return 0;
-          const target = zMax * Math.pow((n.col * GRID) / width, 1.1);
-          z = Math.max(0, target * (0.82 + Math.random() * 0.3));
-          return z;
-        });
+        for (let i = 1; i < chain.length; i++) {
+          const n = chain[i];
+          for (let j = 1; j < n.pts.length; j++) path.push({ x: n.pts[j].x, y: n.pts[j].y, z });
+          if (hopAt.has(i) && i < chain.length - 1) {
+            z = Math.min(D, z + layerZ);
+            path.push({ x: n.pts[n.pts.length - 1].x, y: n.pts[n.pts.length - 1].y, z });
+          }
+        }
+        let pathLen = 0;
+        for (let i = 1; i < path.length; i++) {
+          const a = path[i - 1], b = path[i];
+          pathLen += Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+        }
 
         return {
           nodes,
           maxDist: Math.max(...leaves.map((l) => l.dist)),
           path,
-          pathZ,
-          pathLen: leaf.dist
+          pathLen
         };
       }
 
@@ -4135,15 +4250,15 @@
         if (mode !== 'career' || !career) return;
         const c = career;
         c.t += dtMs;
+        tickHeat(dtMs);
 
         if (c.phase === 'seed') {
           const live = dots.filter((d) => d.state !== 'fading').length;
           if (live < CAREER.MIN_DOTS || c.seeding) {
             c.seeding = true;
-            // Emerge a market quickly (a couple of jobs per frame).
             if (live < CAREER.SEED_DOTS) { spawnDot(); spawnDot(); }
             if (live >= CAREER.SEED_DOTS && c.t > 900) c.seeding = false;
-            if (c.t > 2500) c.seeding = false;   // grid too small to fill: go anyway
+            if (c.t > 2500) c.seeding = false;
             return;
           }
           if (c.t < 200) return;
@@ -4158,10 +4273,12 @@
           if (c.t >= CAREER.HOLD_MS) { c.phase = 'white'; c.t = 0; c.Dw = 0; }
         } else if (c.phase === 'white') {
           c.Dw = Math.min(c.tree.pathLen, c.Dw + CAREER.WHITE_SPEED * dtMs / 1000);
-          c.k = careerEase(Math.min(1, c.t / CAREER.TILT_MS));
-          if (c.Dw >= c.tree.pathLen && c.t >= CAREER.TILT_MS) {
-            c.phase = 'flatten'; c.t = 0;
-          }
+          // The camera orbits with the path at a constant rate: flat at the
+          // start, full 3D at the end, so moves in depth stay easy to follow.
+          c.k = c.Dw / c.tree.pathLen;
+          if (c.Dw >= c.tree.pathLen) { c.k = 1; c.phase = 'hold3d'; c.t = 0; }
+        } else if (c.phase === 'hold3d') {
+          if (c.t >= CAREER.HOLD3D_MS) { c.phase = 'flatten'; c.t = 0; }
         } else if (c.phase === 'flatten') {
           c.k = 1 - careerEase(Math.min(1, c.t / CAREER.TILT_MS));
           if (c.t >= CAREER.TILT_MS) { c.k = 0; c.phase = 'clear'; c.t = 0; }
@@ -4178,19 +4295,44 @@
         return { phase: 'gray', t: 0, D: 0, Dw: 0, k: 0, alpha: 1, tree: buildCareerTree() };
       }
 
-      // 2D grid -> tilted X/Y/Z graph. k = 0 is the exact flat grid.
+      // Raw 3D view (Grok-style): rotate about the vertical axis, then a
+      // slight tilt, with perspective. k = 0 is the exact flat grid.
+      function careerRaw(x, y, z, k) {
+        const unit = width / 2;
+        const D = width * CAREER.DEPTH;
+        const X = x - width / 2, Yup = height / 2 - y, Zc = z - D / 2;
+        const a = CAREER.YAW * k, tl = CAREER.TILT * k;
+        const rx = X * Math.cos(a) - Zc * Math.sin(a);
+        const rz = X * Math.sin(a) + Zc * Math.cos(a);
+        const ry = Yup * Math.cos(tl) - rz * Math.sin(tl);
+        const rz2 = Yup * Math.sin(tl) + rz * Math.cos(tl);
+        const s = 1 + (4.5 / (4.5 + rz2 / unit) - 1) * k;   // perspective, blended in
+        return { x: width / 2 + rx * s, y: height / 2 - ry * s };
+      }
+
+      // Fit the rotated graph inside the card (below the title), blended by k.
+      let careerFitK = -1, careerFit = null;
+      function careerFitFor(k) {
+        if (k === careerFitK) return careerFit;
+        const D = width * CAREER.DEPTH;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const cx of [0, width]) for (const cy of [0, height]) for (const cz of [0, D]) {
+          const p = careerRaw(cx, cy, cz, k);
+          x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+        }
+        const m = 34, top = height * 0.2, bottom = height - 30;
+        const fs = Math.min((width - 2 * m) / (x1 - x0), (bottom - top) / (y1 - y0));
+        careerFit = { bx: (x0 + x1) / 2, by: (y0 + y1) / 2, cx: width / 2, cy: (top + bottom) / 2, fs };
+        careerFitK = k;
+        return careerFit;
+      }
+
       function careerProject(x, y, z, k) {
         if (k <= 0) return { x, y };
-        const a = (CAREER.PITCH * Math.PI / 180) * k;
-        const b = (CAREER.YAW * Math.PI / 180) * k;
-        const X = x - width / 2, Y = y - height / 2;
-        const X1 = X * Math.cos(b) - Y * Math.sin(b);
-        const Y1 = X * Math.sin(b) + Y * Math.cos(b);
-        const Y2 = Y1 * Math.cos(a) - z * Math.sin(a);
-        const Zv = Y1 * Math.sin(a) + z * Math.cos(a);          // toward viewer
-        const F = 1300;
-        const s = (1 + (F / (F - Zv) - 1) * k) * (1 - 0.22 * k);
-        return { x: width / 2 + X1 * s, y: height / 2 + Y2 * s + height * 0.05 * k };
+        const p = careerRaw(x, y, z, k);
+        const f = careerFitFor(k);
+        const fx = f.cx + (p.x - f.bx) * f.fs, fy = f.cy + (p.y - f.by) * f.fs;
+        return { x: p.x + (fx - p.x) * k, y: p.y + (fy - p.y) * k };
       }
 
       function careerLine(p, q) {
@@ -4200,121 +4342,199 @@
         ctx.stroke();
       }
 
+      function careerStroke(projPts) {
+        if (projPts.length < 2) return;
+        ctx.beginPath();
+        ctx.moveTo(projPts[0].x, projPts[0].y);
+        for (let i = 1; i < projPts.length; i++) ctx.lineTo(projPts[i].x, projPts[i].y);
+        ctx.stroke();
+      }
+
       function drawCareer() {
         const c = career;
         const k = c ? c.k : 0;
         const P = (x, y, z) => careerProject(x, y, z || 0, k);
-
-        // Grid plane (lifts slightly in 3D so the plane reads).
-        ctx.lineWidth = 1;
-        const g = Math.round(16 + 34 * k);
-        ctx.strokeStyle = `rgba(${g}, ${g}, ${g + 6 * k}, 0.85)`;
-        for (let col = 0; col * GRID <= width + 0.5; col++) {
-          careerLine(P(col * GRID, 0), P(col * GRID, height));
-        }
-        for (let row = 0; row * GRID <= height + 0.5; row++) {
-          careerLine(P(0, row * GRID), P(width, row * GRID));
-        }
-
-        // Axes fade in with the tilt.
-        if (k > 0.01) {
-          const zTop = height * 0.5;
-          const O = P(0, height, 0);
-          ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 * k})`;
-          ctx.lineWidth = 1.2;
-          const ax = P(width, height, 0), ay = P(0, 0, 0), az = P(0, height, zTop);
-          careerLine(O, ax); careerLine(O, ay); careerLine(O, az);
-          ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * k})`;
-          ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('X', ax.x + 8, ax.y + 2);
-          ctx.fillText('Y', ay.x - 7, ay.y);
-          ctx.fillText('Z', az.x, az.y - 8);
-        }
+        const D = width * CAREER.DEPTH;
+        const layerZ = D / CAREER.SLICES;
+        const now = performance.now();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
         const tree = c && c.tree;
         const alpha = c ? c.alpha : 1;
+        const showWhite = tree && (c.phase === 'white' || c.phase === 'hold3d' || c.phase === 'flatten' || c.phase === 'clear');
+        const whitePts = showWhite ? polyPartial3(tree.path, c.Dw) : null;
+        const headZ = whitePts ? whitePts[whitePts.length - 1].z : 0;
+        const headLayer = Math.round(headZ / layerZ);
+        const fog = (z) => 1 - 0.5 * (z / D) * k;   // farther = dimmer (depth cue)
+
+        if (k > 0.01) {
+          // Floor grid along the bottom of the box (anchors the volume).
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * k})`;
+          for (let x = 0; x <= width + 0.5; x += GRID * 2) careerLine(P(x, height, 0), P(x, height, D));
+          for (let jz = 1; jz <= CAREER.SLICES; jz++) careerLine(P(0, height, jz * layerZ), P(width, height, jz * layerZ));
+
+          // Domain layers along Z (back to front), revealed by the rotation.
+          for (let jz = CAREER.SLICES; jz >= 1; jz--) {
+            const z = jz * layerZ;
+            const reveal = Math.max(0, Math.min(1, (k - (jz / CAREER.SLICES) * 0.45) / 0.35));
+            const reached = whitePts && headZ >= z - 0.5 ? 1 : 0;   // the white path's layers light up
+            const a = (0.12 + 0.28 * reveal + 0.3 * reached) * k * fog(z);
+            if (a < 0.02) continue;
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${a * 0.25})`;
+            const step = GRID * 4;
+            for (let x = 0; x <= width + 0.5; x += step) careerLine(P(x, 0, z), P(x, height, z));
+            for (let y = 0; y <= height + 0.5; y += step) careerLine(P(0, y, z), P(width, y, z));
+            ctx.strokeStyle = `rgba(255, 255, 255, ${a * 0.45})`;
+            ctx.lineWidth = 1.2;
+            careerStroke([P(0, 0, z), P(width, 0, z), P(width, height, z), P(0, height, z), P(0, 0, z)]);
+          }
+        }
+
+        // Main (front) grid — the job market plane.
+        ctx.lineWidth = 1;
+        const gv = Math.round(16 + 40 * k);
+        ctx.strokeStyle = `rgba(${gv}, ${gv}, ${gv}, ${0.85 - 0.4 * k})`;
+        for (let x = 0; x <= width + 0.5; x += GRID) careerLine(P(x, 0), P(x, height));
+        for (let y = 0; y <= height + 0.5; y += GRID) careerLine(P(0, y), P(width, y));
+        if (k > 0.01) {
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * k})`;
+          ctx.lineWidth = 1.2;
+          careerStroke([P(0, 0), P(width, 0), P(width, height), P(0, height), P(0, 0)]);
+        }
+
+        // Demand heat map on the market plane (soft green, follows the 3D view).
+        for (const h of heat) {
+          const ha = heatAlpha(h);
+          if (ha <= 0.01) continue;
+          const o = P(h.x, h.y, 0), ux = P(h.x + h.r, h.y, 0), uy = P(h.x, h.y + h.r, 0);
+          ctx.save();
+          ctx.transform(ux.x - o.x, ux.y - o.y, uy.x - o.x, uy.y - o.y, o.x, o.y);
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+          g.addColorStop(0, `rgba(${CAREER.HEAT_RGB}, ${0.26 * ha})`);
+          g.addColorStop(0.5, `rgba(${CAREER.HEAT_RGB}, ${0.1 * ha})`);
+          g.addColorStop(1, `rgba(${CAREER.HEAT_RGB}, 0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+
+        // Axes with tick labels: X time (years), Y rank, Z domain (layers).
+        if (k > 0.01) {
+          const O = P(0, height, 0);
+          const ax = P(width * 1.05, height, 0), ay = P(0, -height * 0.05, 0), az = P(0, height, D * 1.18);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = `rgba(${CAREER.AXIS_X}, ${0.9 * k})`; careerLine(O, ax);
+          ctx.strokeStyle = `rgba(${CAREER.AXIS_Y}, ${0.9 * k})`; careerLine(O, ay);
+          ctx.strokeStyle = `rgba(${CAREER.AXIS_Z}, ${0.9 * k})`; careerLine(O, az);
+          ctx.textBaseline = 'middle';
+
+          ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillStyle = `rgba(${CAREER.AXIS_X}, ${0.85 * k})`; ctx.fillText('X time', ax.x + 5, ax.y + 3);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = `rgba(${CAREER.AXIS_Y}, ${0.85 * k})`; ctx.fillText('Y rank', ay.x, ay.y - 9);
+          ctx.textAlign = 'left';
+          ctx.fillStyle = `rgba(${CAREER.AXIS_Z}, ${0.85 * k})`; ctx.fillText('Z domain', az.x + 6, az.y + 9);   // below the axis end; layer names sit above it
+
+          ctx.font = '500 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          // X: years
+          ctx.textAlign = 'center';
+          ctx.fillStyle = `rgba(${CAREER.AXIS_X}, ${0.6 * k})`;
+          CAREER.YEARS.forEach((label, ix) => {
+            const t = P((width * ix) / (CAREER.YEARS.length - 1), height, 0);
+            ctx.fillText(label, t.x, t.y + 11);
+          });
+          // Y: rank levels (bottom to top)
+          ctx.textAlign = 'left';
+          ctx.fillStyle = `rgba(${CAREER.AXIS_Y}, ${0.6 * k})`;
+          CAREER.RANKS.forEach((label, iy) => {
+            const t = P(0, height * (0.9 - (0.8 * iy) / (CAREER.RANKS.length - 1)), 0);
+            ctx.fillText(label, t.x + 5, t.y);
+          });
+          // Z: domain layers — the white path's current layer lights up
+          CAREER.LAYERS.forEach((label, iz) => {
+            if (iz > CAREER.SLICES) return;
+            const t = P(0, height, iz * layerZ);
+            const on = whitePts && iz === headLayer;
+            ctx.font = `${on ? 700 : 500} ${on ? 9.5 : 8.5}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+            ctx.fillStyle = on
+              ? `rgba(255, 255, 255, ${0.95 * k})`
+              : `rgba(${CAREER.AXIS_Z}, ${0.55 * k * fog(iz * layerZ)})`;
+            ctx.fillText(label, t.x + 4, t.y - 9);   // just above the Z axis (clear of the X ticks)
+          });
+        }
+
         const touched = new Set();
 
-        // Gray career paths.
+        // Gray career paths (on the front grid).
         if (tree) {
           ctx.lineWidth = 1.6;
-          ctx.lineCap = 'round';
           ctx.strokeStyle = `rgba(150, 160, 176, ${0.8 * alpha})`;
           const tips = [];
           for (const n of tree.nodes) {
             const p = n.parent;
             if (!p || c.D <= p.dist) continue;
-            const t = Math.min(1, (c.D - p.dist) / Math.max(0.001, n.dist - p.dist));
-            const x0 = p.col * GRID, y0 = p.row * GRID;
-            const x1 = x0 + (n.col * GRID - x0) * t, y1 = y0 + (n.row * GRID - y0) * t;
-            careerLine(P(x0, y0), P(x1, y1));
-            if (t >= 1 && n.dot) touched.add(n.dot);
-            if (t < 1) tips.push(P(x1, y1));
+            const part = c.D >= n.dist ? n.pts : polyPartial(n.pts, c.D - p.dist);
+            careerStroke(part.map((q) => P(q.x, q.y, 0)));
+            if (c.D >= n.dist) { if (n.dot) touched.add(n.dot); }
+            else tips.push(P(part[part.length - 1].x, part[part.length - 1].y, 0));
           }
           ctx.fillStyle = `rgba(205, 214, 228, ${0.9 * alpha})`;
-          for (const tp of tips) {
-            ctx.beginPath(); ctx.arc(tp.x, tp.y, 2.2, 0, Math.PI * 2); ctx.fill();
-          }
+          for (const tp of tips) { ctx.beginPath(); ctx.arc(tp.x, tp.y, 2.2, 0, Math.PI * 2); ctx.fill(); }
         }
 
-        // Job dots (on the plane).
+        // Job dots.
         for (const d of dots) {
           const p = P(d.col * GRID, d.row * GRID, 0);
           const a = Math.max(0, Math.min(1, d.alpha));
           const hit = touched.has(d);
           const r = Math.max(1.2, 2.15 * d.scale) * (hit ? 1.35 : 1);
-          ctx.fillStyle = hit
-            ? `rgba(225, 232, 242, ${0.9 * a})`
-            : `rgba(180, 190, 205, ${0.55 * a})`;
+          ctx.fillStyle = hit ? `rgba(225, 232, 242, ${0.9 * a})` : `rgba(180, 190, 205, ${0.55 * a})`;
           ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
         }
 
-        // White "real" path, rising off the plane in 3D.
-        if (tree && (c.phase === 'white' || c.phase === 'flatten' || c.phase === 'clear')) {
-          const pts = [];
-          const path = tree.path;
-          for (let i = 0; i < path.length; i++) {
-            const n = path[i];
-            const pt = { x: n.col * GRID, y: n.row * GRID, z: tree.pathZ[i] * k };
-            if (n.dist <= c.Dw) { pts.push(pt); continue; }
-            const pn = path[i - 1];
-            const t = (c.Dw - pn.dist) / Math.max(0.001, n.dist - pn.dist);
-            const prev = pts[pts.length - 1];
-            pts.push({ x: prev.x + (pt.x - prev.x) * t, y: prev.y + (pt.y - prev.y) * t, z: prev.z + (pt.z - prev.z) * t });
-            break;
-          }
-          const proj = pts.map((q) => P(q.x, q.y, q.z));
-
-          // Drop lines from the path to its position on the plane.
-          if (k > 0.01) {
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.22 * k * alpha})`;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([2, 3]);
-            for (let i = 1; i < pts.length; i++) {
-              careerLine(proj[i], P(pts[i].x, pts[i].y, 0));
+        // White "real" path through X/Y/Z — thinner and dimmer with depth.
+        if (showWhite && whitePts.length > 1) {
+          const proj = whitePts.map((q) => P(q.x, q.y, (q.z || 0) * k));
+          for (let pass = 0; pass < 2; pass++) {
+            for (let i = 1; i < proj.length; i++) {
+              const zMid = ((whitePts[i - 1].z || 0) + (whitePts[i].z || 0)) / 2;
+              const f = fog(zMid);
+              ctx.lineWidth = (pass === 0 ? 6 : 2.4) * (1 - 0.35 * (zMid / D) * k);
+              ctx.strokeStyle = `rgba(255, 255, 255, ${(pass === 0 ? 0.16 : 0.95) * alpha * (0.55 + 0.45 * f)})`;
+              careerLine(proj[i - 1], proj[i]);
             }
-            ctx.setLineDash([]);
           }
 
-          if (proj.length > 1) {
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-            // soft glow pass, then the crisp line
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.18 * alpha})`;
-            ctx.lineWidth = 6;
-            ctx.beginPath(); ctx.moveTo(proj[0].x, proj[0].y);
-            for (let i = 1; i < proj.length; i++) ctx.lineTo(proj[i].x, proj[i].y);
-            ctx.stroke();
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * alpha})`;
-            ctx.lineWidth = 2.2;
-            ctx.stroke();
-            if (c.phase === 'white' && c.Dw < tree.pathLen) {
-              const h = proj[proj.length - 1];
-              ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-              ctx.beginPath(); ctx.arc(h.x, h.y, 3, 0, Math.PI * 2); ctx.fill();
-            }
+          const h = proj[proj.length - 1];
+          if (c.phase === 'white') {
+            // Leading dot with a radial white glow.
+            const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, 14);
+            g.addColorStop(0, `rgba(255, 255, 255, ${0.55 * alpha})`);
+            g.addColorStop(0.45, `rgba(255, 255, 255, ${0.18 * alpha})`);
+            g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(h.x, h.y, 14, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.beginPath(); ctx.arc(h.x, h.y, 3, 0, Math.PI * 2); ctx.fill();
+          } else {
+            // Arrived: the head becomes the Hire beacon (pulsing green).
+            const grow = c.phase === 'hold3d' ? Math.min(1, c.t / 450) : 1;
+            const B = CAREER.BEACON_RGB;
+            const pulse = (now % 1350) / 1350;
+            ctx.strokeStyle = `rgba(${B}, ${0.6 * (1 - pulse) * alpha * grow})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(h.x, h.y, 4 + 12 * pulse, 0, Math.PI * 2); ctx.stroke();
+            const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, 13);
+            g.addColorStop(0, `rgba(${B}, ${0.55 * alpha * grow})`);
+            g.addColorStop(1, `rgba(${B}, 0)`);
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(h.x, h.y, 13, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = `rgba(${B}, ${alpha * grow})`;
+            ctx.beginPath(); ctx.arc(h.x, h.y, 2.5 + 2.5 * grow, 0, Math.PI * 2); ctx.fill();
           }
         }
       }
