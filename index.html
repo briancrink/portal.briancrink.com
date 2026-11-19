@@ -1378,9 +1378,16 @@
     .mp-ground { position: absolute; inset: 0; pointer-events: none; }
     .mp-shadow, .mp-shadow-line {
       position: absolute;
-      transform: translateX(-50%);
+      left: 0;
       opacity: 0;
       pointer-events: none;
+      /* moved by transform only, on their own layers: iOS (home-screen app)
+         didn't repaint these blurred glows when their left/width changed,
+         leaving stale shadows behind under the wrong portal */
+      transform-origin: 50% 100%;
+      will-change: transform, opacity;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
     }
     .mp-shadow {
       bottom: 18%;
@@ -5943,7 +5950,13 @@
         track.style.width = W + 'px';
         track.style.height = H + 'px';
         track.style.transformOrigin = (W / 2) + 'px ' + (H / 2) + 'px';
-        frames.forEach((fr) => { fr.el.style.width = W + 'px'; fr.el.style.height = H + 'px'; });
+        frames.forEach((fr) => {
+          fr.el.style.width = W + 'px'; fr.el.style.height = H + 'px';
+          if (fr.shadow) {                 // fixed size; position/scale via transform
+            fr.shadow.style.width = (W * 1.5) + 'px';
+            fr.line.style.width = (W * 1.35) + 'px';
+          }
+        });
       }
 
       // Desktop: fixed row order. Mobile: each frame takes the copy of its
@@ -5972,10 +5985,11 @@
           fr.el.style.opacity = fr.i === index ? '0' : String(o);
           if (fr.shadow) {
             const cx = baseL + W / 2 + (fr.xpos - f) * (W + GAP) * sc;
-            const w = W * sc * 1.5;
             const a = (fr.i === index ? 1 : o) * mix;
-            fr.shadow.style.left = cx + 'px'; fr.shadow.style.width = w + 'px'; fr.shadow.style.opacity = String(a);
-            fr.line.style.left = cx + 'px'; fr.line.style.width = (w * 0.9) + 'px'; fr.line.style.opacity = String(a);
+            fr.shadow.style.transform = 'translate3d(' + (cx - W * 0.75).toFixed(1) + 'px,0,0) scaleX(' + sc.toFixed(4) + ')';
+            fr.line.style.transform = 'translate3d(' + (cx - W * 0.675).toFixed(1) + 'px,0,0) scaleX(' + sc.toFixed(4) + ')';
+            fr.shadow.style.opacity = a.toFixed(3);
+            fr.line.style.opacity = a.toFixed(3);
           }
         });
         if (ground) ground.style.setProperty('--mp-single', String(1 - mix));
