@@ -1309,6 +1309,52 @@
       transform: translateY(-50%);
     }
 
+    /* Desktop / tablet: one top bar — name top-left, PORTAL + map centred,
+       buttons top-right (fixed). Phones keep the stacked header. */
+    @media (min-width: 769px) {
+      .header {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 14px 28px 0;
+        text-align: left;
+      }
+      .name {
+        font-size: 1.75rem;
+        letter-spacing: -0.3px;
+        margin: 0;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+      }
+      .sub-header {
+        position: absolute;
+        top: 14px;
+        left: 0;
+        right: 0;
+        height: 44px;
+        padding: 0;
+        font-size: 1.3rem;
+        letter-spacing: 4px;
+        pointer-events: none;      /* the row's empty space never blocks the name */
+      }
+      .sub-header-link,
+      .map-link { pointer-events: auto; }
+      .map-link {
+        position: static;
+        transform: none;
+        margin-left: 0.35rem;
+      }
+      .map-icon {
+        width: 4.4rem;
+        height: 4.4rem;
+      }
+      .chrome-btns {
+        top: 20px;                 /* centred on the 44px row */
+        right: 28px;
+      }
+      .portal-stage { padding-top: clamp(48px, 11vh, 120px); }   /* portal centred under the slimmer bar */
+    }
+
     .subtitle {
       font-size: 0.95rem;
       color: rgba(255,255,255,0.8);
