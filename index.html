@@ -1169,6 +1169,17 @@
       z-index: 2;
       pointer-events: none;
     }
+    @media (prefers-reduced-motion: reduce) {
+      .world.work.active::before { animation: none; }
+      .portal-bloom-chroma,
+      .portal-bloom-chroma-soft,
+      .portal-rim-chroma,
+      .scene-ground-chroma-wash,
+      .scene-ground-chroma-reflect,
+      .scene-ground-chroma-line { animation: none; }
+      .hire-beacon .pulse-ring { animation: none; opacity: 0; }
+    }
+
     @keyframes pulseBeacon {
       0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0.6; }
       100% { transform: translate(-50%, -50%) scale(2.3); opacity: 0; }
@@ -3518,6 +3529,9 @@
       const canvas = document.getElementById('jobsMarket');
       if (!workWorld || !canvas) return;
 
+      // Reduced motion: every CareerOS animation shows a calm, finished
+      // frame instead (settled market, completed Career graph, Hire seated).
+      const calmMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
       const ctx = canvas.getContext('2d');
       const GRID = 24;
       const MAX_DOTS = 50;
@@ -3644,8 +3658,15 @@
           age: 0,
           pulse: Math.random() * Math.PI * 2,
           scale: state === 'pulsing' ? 1 : 0,
-          alpha: 1
+          alpha: 1,
+          // Domain layer (0 = front grid). Only visible in the Career 3D view;
+          // in 2D every job sits on the one market plane.
+          layer: at.layer != null ? at.layer : Math.floor(Math.random() * (CAREER.SLICES + 1)),
+          // How well the role matches current skills (0..1): strong matches
+          // draw brighter and larger, and Career paths prefer them.
+          match: Math.pow(Math.random(), 0.85)
         };
+        if (calmMotion) { d.state = 'pulsing'; d.scale = 1; }
         dots.push(d);
         return d;
       }
@@ -3699,13 +3720,18 @@
       }
 
       function startJobsPreview() {
-        if (mode === 'jobs') return;
+        if (mode === 'jobs' || mode === 'unhire') return;
+        if (mode === 'hire' && !calmMotion) { beginUnhire(); return; }   // smooth Hire -> Jobs
         const keepDots = mode === 'career';   // Career -> Jobs keeps the same market
         workWorld.classList.add('jobs-preview');
         workWorld.classList.remove('hire-preview', 'career-preview');
         career = null;
         resize();
-        if (!keepDots) dots = [];
+        if (!keepDots) {
+          dots = [];
+          heat = [];
+          heatNextIn = 400;
+        }
         frame = 0;
         nextSpawnAt = 20;
         nextTurnoverAt = 0;
@@ -3717,6 +3743,7 @@
 
       function startHirePreview() {
         if (mode === 'hire') return;
+        if (mode === 'unhire') finishUnhire();
         workWorld.classList.add('hire-preview');
         workWorld.classList.remove('jobs-preview', 'career-preview');
         career = null;
@@ -3777,10 +3804,24 @@
           hirePhase = 'lead';
           applyHireCameraTargets();
         }
+
+        if (calmMotion && chosen) {
+          // Already seated: no pan, no zoom.
+          dots = [chosen];
+          chosen.state = 'pulsing';
+          hirePhase = 'hold';
+          hireHoldAt = performance.now();
+          applyHireCameraTargets();
+          camX = targetCamX; camY = targetCamY; camScale = targetScale;
+          beginHireHandoff();
+          setHireLocation(true);
+          chosen.alpha = 0;
+        }
       }
 
       function stopJobsPreview() {
         if (!active && mode === 'off') return;
+        unhire = null;
         active = false;
         mode = 'off';
         workWorld.classList.remove('jobs-preview');
@@ -3794,6 +3835,8 @@
 
       function startCareerPreview() {
         if (mode === 'career') return;
+        if (mode === 'unhire') finishUnhire();
+        const fromJobs = mode === 'jobs';
         workWorld.classList.add('career-preview');
         workWorld.classList.remove('jobs-preview', 'hire-preview');
         resize();
@@ -3811,8 +3854,10 @@
           if (d.state === 'pulsing') d.alpha = 1;
         });
         career = { phase: 'seed', t: 0, D: 0, Dw: 0, k: 0, alpha: 1 };
-        heat = [];
-        heatNextIn = 400;
+        if (!fromJobs) {   // Jobs -> Career carries the same demand hot spots over
+          heat = [];
+          heatNextIn = 400;
+        }
       }
 
       // dt = elapsed time in 60fps-frame units, so every rate below keeps its
@@ -3838,7 +3883,7 @@
             }
           } else if (d.state === 'pulsing') {
             d.pulse += 0.022 * dt;
-            d.scale = 1 + Math.sin(d.pulse) * 0.28;
+            d.scale = calmMotion ? 1 : 1 + Math.sin(d.pulse) * 0.28;
             if (d.canvasFade) d.alpha = Math.max(0, d.alpha - 0.018 * dt);
             else d.alpha = 1;
           } else if (d.state === 'fading') {
@@ -3850,13 +3895,48 @@
         if (chosen && !dots.includes(chosen)) chosen = null;
       }
 
+      // Demand creates jobs: about half of new jobs emerge inside an active
+      // hot spot (and belong to that spot's domain layer).
+      function hotCell() {
+        const hot = heat.filter((h) => heatAlpha(h) > 0.5);
+        if (!hot.length || Math.random() > 0.5) return null;
+        const h = hot[Math.floor(Math.random() * hot.length)];
+        const used = occupied();
+        for (let tries = 0; tries < 12; tries++) {
+          const ang = Math.random() * Math.PI * 2, rad = Math.sqrt(Math.random()) * h.r * 0.8;
+          const col = Math.round((h.x + Math.cos(ang) * rad) / GRID);
+          const row = Math.round((h.y + Math.sin(ang) * rad) / GRID);
+          if (col < 0 || row < 0 || col > cols || row > rows || used.has(col + ',' + row)) continue;
+          return { col, row, layer: h.layer };
+        }
+        return null;
+      }
+
+      function drawHeat2D() {
+        for (const h of heat) {
+          const ha = heatAlpha(h);
+          if (ha <= 0.01) continue;
+          const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
+          g.addColorStop(0, `rgba(${CAREER.HEAT_RGB}, ${0.26 * ha})`);
+          g.addColorStop(0.5, `rgba(${CAREER.HEAT_RGB}, ${0.1 * ha})`);
+          g.addColorStop(1, `rgba(${CAREER.HEAT_RGB}, 0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
       function tickMarket() {
         if (!active || mode !== 'jobs') return;
+        if (calmMotion) {   // a settled market: fill once, no turnover
+          let live = dots.filter((d) => d.state !== 'fading').length;
+          while (live < 36 && spawnDot(hotCell() || undefined)) live++;
+          return;
+        }
         frame += dt;
         const live = dots.filter(d => d.state !== 'fading').length;
         if (live < MAX_DOTS) {
           if (frame >= nextSpawnAt) {
-            if (spawnDot()) nextSpawnAt = frame + EMERGE_INTERVAL + Math.floor(Math.random() * 40);
+            if (spawnDot(hotCell())) nextSpawnAt = frame + EMERGE_INTERVAL + Math.floor(Math.random() * 40);
             else nextSpawnAt = frame + 30;
           }
         } else {
@@ -3942,12 +4022,365 @@
               hirePhase = 'rest';
             } else {
               hirePhase = 'hold';
+              hireHoldAt = performance.now();
             }
           }
         }
       }
 
+      /* ---- Hire: gravity well + ripples around the seated beacon ----
+         Same model and tuning as hire.briancrink.com: grid points are pulled
+         toward the beacon (exponential well) while a ripple travels outward;
+         segments on a ripple crest are drawn a touch brighter. Eases in once
+         the zoom settles; static well (no ripple) with reduced motion. */
+      const WELL = 16, WELL_R = 64;
+      const RIPPLE_AMP = 7, RIPPLE_LEN = 22, RIPPLE_SPEED = 2.4, RIPPLE_DECAY = 120, RIPPLE_OPACITY = 0.14;
+      const WARP_CUTOFF_SQ = 340 * 340;
+      const WELL_STEPS = 20;
+      const WELL_EASE_MS = 900;
+      const wellColors = [];
+      for (let i = 0; i <= WELL_STEPS; i++) {
+        const lift = RIPPLE_OPACITY * (i / WELL_STEPS);
+        const g = Math.round(16 + lift * 140);
+        wellColors.push(`rgba(${g}, ${g}, ${g}, ${Math.min(0.95, 0.85 + lift).toFixed(3)})`);
+      }
+      let hireHoldAt = 0;
+      let wellPX = null, wellPY = null, wellCrest = null, wellCount = 0;
+
+      function wellStrengthNow() {
+        const ease = calmMotion ? 1 : Math.min(1, (performance.now() - hireHoldAt) / WELL_EASE_MS);
+        return ease * ease * (3 - 2 * ease);
+      }
+
+      // strength: 0 = flat grid … 1 = full well. fineA: opacity of the
+      // half-cell lines (1 when fully zoomed in, fading out as it zooms out).
+      function drawGridWell(strength, fineA) {
+        const now = performance.now();
+        const s = strength != null ? strength : wellStrengthNow();
+        if (fineA == null) fineA = 1;
+        const t = now / 1000;
+        const o = beaconCenter();
+        const step = (GRID * camScale) / 2;   // the zoomed grid's fine spacing
+        const c0 = Math.floor(-camX / step) - 1, c1 = Math.ceil((width - camX) / step) + 1;
+        const r0 = Math.floor(-camY / step) - 1, r1 = Math.ceil((height - camY) / step) + 1;
+        const cols = c1 - c0, rws = r1 - r0, stride = cols + 1;
+        const count = stride * (rws + 1);
+        if (count > wellCount) {
+          wellPX = new Float32Array(count); wellPY = new Float32Array(count); wellCrest = new Float32Array(count);
+          wellCount = count;
+        }
+        for (let r = 0; r <= rws; r++) {
+          const y = camY + (r0 + r) * step;
+          for (let c = 0; c <= cols; c++) {
+            const idx = r * stride + c;
+            const x = camX + (c0 + c) * step;
+            const dx = x - o.x, dy = y - o.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > WARP_CUTOFF_SQ) { wellPX[idx] = x; wellPY[idx] = y; wellCrest[idx] = 0; continue; }
+            const dist = Math.sqrt(d2) || 0.0001;
+            const env = Math.exp(-dist / RIPPLE_DECAY);
+            const wave = calmMotion ? 0 : Math.sin(dist / RIPPLE_LEN - t * RIPPLE_SPEED);
+            const pull = (-WELL * Math.exp(-dist / WELL_R) + (calmMotion ? 0 : RIPPLE_AMP * wave * env)) * s;
+            wellPX[idx] = x + (dx / dist) * pull;
+            wellPY[idx] = y + (dy / dist) * pull;
+            wellCrest[idx] = Math.max(0, wave) * env * s;
+          }
+        }
+        const paths = new Array(WELL_STEPS + 1);
+        const finePaths = new Array(WELL_STEPS + 1);
+        const seg = (a, b, fine) => {
+          const cr = (wellCrest[a] + wellCrest[b]) * 0.5;
+          const k = cr <= 0 ? 0 : Math.min(WELL_STEPS, Math.round(cr * WELL_STEPS));
+          const set = fine ? finePaths : paths;
+          const path = set[k] || (set[k] = new Path2D());
+          path.moveTo(wellPX[a], wellPY[a]);
+          path.lineTo(wellPX[b], wellPY[b]);
+        };
+        // odd lattice lines are the half-cell (fine) lines of the zoomed grid
+        for (let c = 0; c <= cols; c++) {
+          const fine = ((c0 + c) % 2 + 2) % 2 === 1;
+          if (fine && fineA <= 0.01) continue;
+          for (let r = 0; r < rws; r++) seg(r * stride + c, (r + 1) * stride + c, fine);
+        }
+        for (let r = 0; r <= rws; r++) {
+          const fine = ((r0 + r) % 2 + 2) % 2 === 1;
+          if (fine && fineA <= 0.01) continue;
+          for (let c = 0; c < cols; c++) seg(r * stride + c, r * stride + c + 1, fine);
+        }
+        ctx.lineWidth = 1;
+        for (let k = 0; k <= WELL_STEPS; k++) {
+          if (!paths[k]) continue;
+          ctx.strokeStyle = wellColors[k];
+          ctx.stroke(paths[k]);
+        }
+        if (fineA > 0.01) {
+          ctx.globalAlpha = Math.min(1, fineA);
+          for (let k = 0; k <= WELL_STEPS; k++) {
+            if (!finePaths[k]) continue;
+            ctx.strokeStyle = wellColors[k];
+            ctx.stroke(finePaths[k]);
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      /* ---- Hire -> Jobs: a smooth hand-over ----
+         The beacon's dot stays put (the green fades, leaving a white job dot),
+         the camera zooms back out around it and settles onto the Jobs grid,
+         dots drawn in by the well glide to the nearest grid point, and the
+         well relaxes flat. Then Jobs carries on with those dots. */
+      const UNHIRE_MS = 1200;
+      let unhire = null;
+
+      function beginUnhire() {
+        const seat = beaconCenter();
+        const wx = (seat.x - camX) / camScale, wy = (seat.y - camY) / camScale;   // seat in world px
+        const endX = Math.round((seat.x - wx) / GRID) * GRID;   // camera at scale 1, snapped to the Jobs grid
+        const endY = Math.round((seat.y - wy) / GRID) * GRID;
+        const parts = infall.map((d) => {
+          const pwx = (d.x - camX) / camScale, pwy = (d.y - camY) / camScale;
+          return {
+            sx: d.x, sy: d.y, wx: pwx, wy: pwy, m: d.m,
+            ex: Math.round((endX + pwx) / GRID) * GRID,
+            ey: Math.round((endY + pwy) / GRID) * GRID,
+            a: Math.min(1, d.age / 400) * (d.falling ? 1 : Math.max(0, Math.min(1, (d.life - d.age) / 700)))
+          };
+        }).filter((q) => q.a > 0.05 && q.ex >= 0 && q.ey >= 0 && q.ex <= width && q.ey <= height);
+        infall = [];
+        // The beacon's dot stays, but if the new subtitle / location text now
+        // covers its spot, it glides to the nearest clear grid point instead.
+        const cd = chosen;
+        if (cd) {
+          const zone = infallClearZone();
+          const ex = endX + cd.col * GRID, ey = endY + cd.row * GRID;   // its spot once settled
+          const inZone = (x, y) => zone && x > zone.x0 && x < zone.x1 && y > zone.y0 && y < zone.y1;
+          if (inZone(ex, ey)) {
+            const taken = new Set(parts.map((q) => q.ex + ',' + q.ey));
+            dots.forEach((d) => { if (d !== cd) taken.add((endX + d.col * GRID) + ',' + (endY + d.row * GRID)); });
+            let best = null;
+            for (let dr = -6; dr <= 6; dr++) {
+              for (let dc = -6; dc <= 6; dc++) {
+                const x = ex + dc * GRID, y = ey + dr * GRID;
+                if (x < GRID || y < GRID || x > width - GRID || y > height - GRID) continue;
+                if (inZone(x, y) || taken.has(x + ',' + y)) continue;
+                const dist = Math.hypot(dc, dr);
+                if (!best || dist < best.dist) best = { dc, dr, dist };
+              }
+            }
+            if (best) cd.slide = { dc: best.dc, dr: best.dr, k: 0 };
+          }
+        }
+        unhire = {
+          t: 0, seatX: seat.x, seatY: seat.y, wx, wy,
+          s0: camScale, endX, endY,
+          dX: endX - (seat.x - wx), dY: endY - (seat.y - wy),
+          well0: hirePhase === 'hold' ? wellStrengthNow() : 0,
+          parts, cd
+        };
+        // green beacon + location line fade out over the white dot beneath
+        const bEl = workWorld.querySelector('.hire-beacon');
+        const lEl = workWorld.querySelector('.hire-location');
+        [bEl, lEl].forEach((el) => {
+          if (!el) return;
+          el.style.transition = 'opacity 0.5s ease, visibility 0s linear 0.5s';
+          setTimeout(() => { el.style.transition = ''; }, 700);
+        });
+        setHireBeacon(false);
+        setHireLocation(false);
+        if (chosen) { chosen.canvasFade = false; chosen.state = 'pulsing'; chosen.alpha = 1; }
+        hirePhase = 'idle';
+        mode = 'unhire';
+      }
+
+      function tickUnhire(dtMs) {
+        if (mode !== 'unhire' || !unhire) return;
+        const u = unhire;
+        u.t = Math.min(1, u.t + dtMs / UNHIRE_MS);
+        const e = easeInOutCubic(u.t);
+        camScale = u.s0 + (1 - u.s0) * e;
+        camX = u.seatX - u.wx * camScale + u.dX * e;   // zoom about the seat, settle onto the grid
+        camY = u.seatY - u.wy * camScale + u.dY * e;
+        if (u.t >= 1) finishUnhire();
+      }
+
+      function drawUnhire() {
+        const u = unhire;
+        if (!u) return;
+        const e = easeInOutCubic(u.t);
+        const zoomT = Math.max(0, Math.min(1, (camScale - 1) / (HIRE_SCALE - 1)));
+        const glide = 1 - Math.pow(1 - u.t, 3);   // decelerate into place
+        if (u.cd && u.cd.slide) u.cd.slide.k = glide;
+        drawGridWell(u.well0 * (1 - e), zoomT * zoomT);
+        drawDots();
+        for (const q of u.parts) {
+          const nx = camX + q.wx * camScale, ny = camY + q.wy * camScale;
+          const x = q.sx + (nx - q.sx) * e + (q.ex - (q.sx + (nx - q.sx) * e)) * glide;
+          const y = q.sy + (ny - q.sy) * e + (q.ey - (q.sy + (ny - q.sy) * e)) * glide;
+          ctx.fillStyle = `rgba(185, 195, 210, ${(0.35 + 0.5 * q.m) * q.a})`;
+          ctx.beginPath(); ctx.arc(x, y, 1.6 + 1.4 * q.m, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      function finishUnhire() {
+        const u = unhire;
+        if (!u) return;
+        unhire = null;
+        // re-base everything onto the Jobs grid (camera back to identity)
+        const sc = Math.round(u.endX / GRID), sr = Math.round(u.endY / GRID);
+        dots.forEach((d) => {
+          if (d.slide) { d.col += d.slide.dc; d.row += d.slide.dr; delete d.slide; }
+          d.col += sc; d.row += sr; d.canvasFade = false; d.isBeacon = false;
+        });
+        dots = dots.filter((d) => d.col >= 0 && d.row >= 0 && d.col <= cols && d.row <= rows);
+        const used = occupied();
+        for (const q of u.parts) {
+          const col = Math.round(q.ex / GRID), row = Math.round(q.ey / GRID);
+          if (used.has(col + ',' + row)) continue;
+          const d = spawnDot({ col, row }, 'pulsing');
+          if (d) { d.match = q.m; used.add(col + ',' + row); }
+        }
+        camX = 0; camY = 0; camScale = 1;
+        targetCamX = 0; targetCamY = 0; targetScale = 1;
+        hirePhase = 'idle'; hireWait = 0; hireTween = 0;
+        chosen = null; hireBay = null;
+        workWorld.classList.add('jobs-preview');
+        workWorld.classList.remove('hire-preview', 'career-preview');
+        heat = []; heatNextIn = 400;
+        frame = 0; nextSpawnAt = 20; nextTurnoverAt = 0;
+        mode = 'jobs';
+      }
+
+      /* ---- Hire: opportunities drawn in by the well ----
+         After the well settles, job dots appear around the grid. Those within
+         the well's reach feel its pull: they creep in, accelerate and curve
+         slightly as they fall, stretch toward the beacon, then merge into it
+         (the beacon brightens). Dots out of reach stay put and fade away. */
+      const INFALL = {
+        START_MS: 1800,        // after the hold begins (well eased in + first ripples)
+        EVERY: [650, 1300],    // ms between new dots
+        MAX: 6,                // on screen at once
+        REACH: 230,            // px: dots closer than this feel the pull
+        EDGE_SPEED: 13,        // px/s at the edge of reach
+        MAX_SPEED: 240,        // px/s cap near the beacon
+        LIFE: [2600, 4200]     // ms an out-of-reach dot lingers
+      };
+      let infall = [];
+      let infallNextIn = 0;
+      let beaconFlashAt = -1e9;
+
+      function infallClearZone() {
+        // keep new dots off the title / subtitle / location text
+        const wr = workWorld.getBoundingClientRect();
+        const els = [workWorld.querySelector('h2'), workWorld.querySelector('.hire-lede'), workWorld.querySelector('.hire-location')];
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        els.forEach((el) => {
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          if (!r.width) return;
+          x0 = Math.min(x0, r.left - wr.left); y0 = Math.min(y0, r.top - wr.top);
+          x1 = Math.max(x1, r.right - wr.left); y1 = Math.max(y1, r.bottom - wr.top);
+        });
+        return x0 === Infinity ? null : { x0: x0 - 12, y0: y0 - 12, x1: x1 + 12, y1: y1 + 12 };
+      }
+
+      function tickInfall(dtMs) {
+        if (mode !== 'hire' || hirePhase !== 'hold' || calmMotion) {
+          infall = []; infallNextIn = 0; return;
+        }
+        const now = performance.now();
+        if (now - hireHoldAt < INFALL.START_MS) return;
+        const o = beaconCenter();
+        const dts = dtMs / 1000;
+
+        infallNextIn -= dtMs;
+        if (infallNextIn <= 0 && infall.length < INFALL.MAX) {
+          infallNextIn = INFALL.EVERY[0] + Math.random() * (INFALL.EVERY[1] - INFALL.EVERY[0]);
+          const zone = infallClearZone();
+          const step = (GRID * camScale) / 2;
+          // favour spots inside the well's reach so the pull is visible
+          for (let tries = 0; tries < 14; tries++) {
+            const near = Math.random() < 0.75;
+            const ang = Math.random() * Math.PI * 2;
+            const rad = near ? 60 + Math.random() * (INFALL.REACH - 70) : INFALL.REACH + Math.random() * 220;
+            const gx = camX + Math.round((o.x + Math.cos(ang) * rad - camX) / step) * step;
+            const gy = camY + Math.round((o.y + Math.sin(ang) * rad - camY) / step) * step;
+            if (gx < 8 || gy < 8 || gx > width - 8 || gy > height - 8) continue;
+            if (zone && gx > zone.x0 && gx < zone.x1 && gy > zone.y0 && gy < zone.y1) continue;
+            if (Math.hypot(gx - o.x, gy - o.y) < 45) continue;
+            infall.push({
+              x: gx, y: gy, age: 0,
+              life: INFALL.LIFE[0] + Math.random() * (INFALL.LIFE[1] - INFALL.LIFE[0]),
+              swirl: Math.random() < 0.5 ? 1 : -1,
+              m: 0.4 + Math.random() * 0.6,
+              falling: false
+            });
+            break;
+          }
+        }
+
+        const keep = [];
+        for (const d of infall) {
+          d.age += dtMs;
+          const dx = o.x - d.x, dy = o.y - d.y;
+          const dist = Math.hypot(dx, dy) || 0.001;
+          if (!d.falling && d.age > 350 && dist < INFALL.REACH) d.falling = true;
+          if (d.falling) {
+            // heavier pull the closer it gets; a slight curve that tightens in
+            const speed = Math.min(INFALL.MAX_SPEED, INFALL.EDGE_SPEED * Math.pow(INFALL.REACH / dist, 1.5));
+            const curve = d.swirl * 0.55 * Math.min(1, dist / INFALL.REACH);
+            const ux = dx / dist, uy = dy / dist;
+            const cx = ux * Math.cos(curve) - uy * Math.sin(curve);
+            const cy = ux * Math.sin(curve) + uy * Math.cos(curve);
+            const stepLen = Math.min(dist, speed * dts);
+            d.x += cx * stepLen; d.y += cy * stepLen;
+            d.dist = Math.hypot(o.x - d.x, o.y - d.y);
+            if (d.dist < 6) { beaconFlashAt = now; continue; }   // merged
+          } else {
+            d.dist = dist;
+            if (d.age > d.life) continue;                        // out of reach: fade away
+          }
+          keep.push(d);
+        }
+        infall = keep;
+      }
+
+      function drawInfall() {
+        if (mode !== 'hire') return;
+        const now = performance.now();
+        const o = beaconCenter();
+        const B = CAREER.BEACON_RGB;
+        // the beacon brightens briefly as an opportunity merges
+        const fl = 1 - Math.min(1, (now - beaconFlashAt) / 650);
+        if (fl > 0) {
+          const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 26);
+          g.addColorStop(0, `rgba(${B}, ${0.55 * fl})`);
+          g.addColorStop(1, `rgba(${B}, 0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(o.x, o.y, 26, 0, Math.PI * 2); ctx.fill();
+        }
+        for (const d of infall) {
+          const fadeIn = Math.min(1, d.age / 400);
+          const fadeOut = d.falling ? 1 : Math.max(0, Math.min(1, (d.life - d.age) / 700));
+          const a = (0.35 + 0.5 * d.m) * fadeIn * fadeOut;
+          if (a <= 0.01) continue;
+          const dist = d.dist != null ? d.dist : 999;
+          const shrink = Math.min(1, dist / 30);                 // shrinks into the beacon
+          const r = (1.6 + 1.4 * d.m) * (0.35 + 0.65 * shrink);
+          const stretch = dist < 45 ? 1 + ((45 - dist) / 45) * 1.6 : 1;   // tidal stretch
+          ctx.save();
+          ctx.translate(d.x, d.y);
+          ctx.rotate(Math.atan2(o.y - d.y, o.x - d.x));
+          ctx.scale(stretch, 1 / Math.sqrt(stretch));
+          ctx.fillStyle = d.falling && dist < 60
+            ? `rgba(210, 240, 220, ${a})`                     // tinted as it nears the beacon
+            : `rgba(185, 195, 210, ${a})`;
+          ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+      }
+
       function drawGrid() {
+        if (mode === 'hire' && hirePhase === 'hold') { drawGridWell(); return; }
         ctx.lineWidth = 1;
         const cell = GRID * camScale;
         const minCol = Math.floor((-camX) / cell) - 1;
@@ -4002,11 +4435,22 @@
       function drawDots() {
         for (const d of dots) {
           const p = worldToScreen(d.col, d.row);
-          const r = Math.max(1.2, 2.15 * d.scale * (0.9 + 0.1 * camScale));
+          if (d.slide) {   // gliding to a clear grid point (Hire -> Jobs)
+            p.x += d.slide.dc * GRID * camScale * d.slide.k;
+            p.y += d.slide.dr * GRID * camScale * d.slide.k;
+          }
           const a = Math.max(0, Math.min(1, d.alpha));
-          const fill = d === chosen && mode === 'hire'
-            ? 'rgba(230, 235, 245,' + (0.85 * a) + ')'
-            : 'rgba(180, 190, 205,' + (0.55 * a) + ')';
+          const m = d.match != null ? d.match : 0.6;
+          let r = Math.max(1.2, 2.15 * d.scale * (0.9 + 0.1 * camScale));
+          let fill;
+          if (d === chosen && mode === 'hire') {
+            fill = 'rgba(230, 235, 245,' + (0.85 * a) + ')';
+          } else {
+            r *= 0.72 + 0.6 * m;
+            fill = m > 0.82
+              ? 'rgba(222, 234, 250,' + ((0.45 + 0.45 * m) * a) + ')'
+              : 'rgba(180, 190, 205,' + ((0.28 + 0.5 * m) * a) + ')';
+          }
           ctx.fillStyle = fill;
           ctx.beginPath();
           ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -4041,7 +4485,12 @@
         MAX_DY: 2,            // max rows up/down per step
         MAX_PATHS: 6,         // cap on simultaneous gray branches
         SPLIT_P: 0.42,        // chance a path splits at a job dot
+        RISE_BIAS: 0.9,       // how strongly paths prefer stepping up in rank
+        RISE_ADVANCE: 0.45,   // chance a no-job "advance" step climbs 1-2 rows
+        HOP_COST: 0.2,        // reluctance to change domain (lower = more Z hops)
         GRAY_SPEED: 230,      // px / s
+        GRAY_RGB: '112, 120, 134', // projected (possible) paths: mid gray…
+        GRAY_ALPHA: 0.55,          // …at partial opacity, so the white path stands out
         WHITE_SPEED: 120,     // px / s (measured in 3D, layer hops included)
         HOLD_MS: 450,         // pause between gray and white
         TILT_MS: 1400,        // 3D -> 2D rotation back at the end
@@ -4076,12 +4525,23 @@
         return Math.max(0, Math.min(1, h.age / 1000, (h.life - h.age) / 1500));
       }
       function tickHeat(dtMs) {
+        if (calmMotion) {   // three steady hot spots
+          while (heat.length < 3) {
+            heat.push({
+              layer: Math.floor(Math.random() * (CAREER.SLICES + 1)),
+              x: width * (0.12 + Math.random() * 0.76), y: height * (0.3 + Math.random() * 0.6),
+              r: GRID * (2.8 + Math.random() * 1.6), age: 1500, life: Infinity
+            });
+          }
+          return;
+        }
         heat.forEach((h) => { h.age += dtMs; });
         heat = heat.filter((h) => h.age < h.life);
         heatNextIn -= dtMs;
         if (heatNextIn <= 0 && heat.length < CAREER.HEAT_MAX) {
           const [e0, e1] = CAREER.HEAT_EVERY, [l0, l1] = CAREER.HEAT_LIFE;
           heat.push({
+            layer: Math.floor(Math.random() * (CAREER.SLICES + 1)),
             x: width * (0.08 + Math.random() * 0.84),
             y: height * (0.26 + Math.random() * 0.66),
             r: GRID * (2.5 + Math.random() * 2),
@@ -4093,21 +4553,32 @@
       }
       function isHot(d) {
         const x = d.col * GRID, y = d.row * GRID;
-        return heat.some((h) => heatAlpha(h) > 0.35 && Math.hypot(x - h.x, y - h.y) < h.r * 0.85);
+        return heat.some((h) => h.layer === d.layer && heatAlpha(h) > 0.35 && Math.hypot(x - h.x, y - h.y) < h.r * 0.85);
       }
 
       function careerEase(t) {
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       }
 
-      // Points (px) of one step from (c0,r0) to (c1,r1), start included.
-      function careerStepPts(c0, r0, c1, r1) {
-        const a = { x: c0 * GRID, y: r0 * GRID };
-        const b = { x: c1 * GRID, y: r1 * GRID };
-        if (CAREER.ROUTE === 'grid' && r0 !== r1 && c0 !== c1) {
-          return [a, { x: a.x, y: b.y }, b];   // up/down first, then right
+      // Points (px, with z) of one step from (c0,r0,z0) to (c1,r1,z1), start
+      // included. A domain change is a pure hop back along Z at the start of
+      // the step; then up/down (rank), then right (time).
+      function careerStepPts(c0, r0, z0, c1, r1, z1) {
+        const a = { x: c0 * GRID, y: r0 * GRID, z: z0 };
+        const b = { x: c1 * GRID, y: r1 * GRID, z: z1 };
+        const pts = [a];
+        if (z1 !== z0) pts.push({ x: a.x, y: a.y, z: z1 });
+        if (CAREER.ROUTE === 'grid' && r0 !== r1 && c0 !== c1) pts.push({ x: a.x, y: b.y, z: z1 });
+        pts.push(b);
+        return pts;
+      }
+
+      function polyLen3(pts) {
+        let L = 0;
+        for (let i = 1; i < pts.length; i++) {
+          L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y, (pts[i].z || 0) - (pts[i - 1].z || 0));
         }
-        return [a, b];
+        return L;
       }
 
       function polyLen(pts) {
@@ -4152,7 +4623,8 @@
         const maxRow = Math.max(minRow, rows - 1);
         const live = dots.filter((d) => d.state !== 'fading' && d.row >= minRow && d.row <= maxRow);
         const edgeCol = width / GRID;
-        const bandLo = Math.round(rows * 0.38), bandHi = Math.round(rows * 0.7);
+        const layerZ = (width * CAREER.DEPTH) / CAREER.SLICES;
+        const bandLo = Math.round(rows * 0.45), bandHi = Math.round(rows * 0.78);
         let startRow = Math.round(bandLo + Math.random() * (bandHi - bandLo));
         const leftJobs = live.filter((d) => d.col >= 1 && d.col <= 4 && d.row >= bandLo && d.row <= bandHi);
         if (leftJobs.length) {
@@ -4161,7 +4633,7 @@
         }
         startRow = Math.max(minRow, Math.min(maxRow, startRow));
 
-        const root = { col: 0, row: startRow, dot: null, parent: null, dist: 0, children: [], pts: null };
+        const root = { col: 0, row: startRow, layer: 0, dot: null, parent: null, dist: 0, children: [], pts: null };
         const nodes = [root];
         const leaves = [];
         const used = new Set();
@@ -4171,37 +4643,51 @@
           const n = queue.shift();
           if (n.col >= edgeCol - 0.001) { leaves.push(n); continue; }
 
+          // Reachable jobs: to the right, within MAX_DY rows, and in the same
+          // or a deeper domain layer (domain never goes back either).
           const cands = live.filter((d) =>
             d.col > n.col && d.col <= n.col + CAREER.LOOK_COLS &&
-            Math.abs(d.row - n.row) <= CAREER.MAX_DY && !used.has(d));
-          cands.sort((a, b) =>
-            (a.col - b.col) || (Math.abs(a.row - n.row) - Math.abs(b.row - n.row)));
-          // Paths lean toward emerging demand: a nearby job inside a hot
-          // spot is taken first.
-          const hotIdx = cands.slice(0, 3).findIndex(isHot);
-          if (hotIdx > 0) cands.unshift(cands.splice(hotIdx, 1)[0]);
+            Math.abs(d.row - n.row) <= CAREER.MAX_DY &&
+            d.layer >= n.layer && !used.has(d));
+          // Prefer near jobs, small domain hops, emerging demand, and —
+          // a bit more often than not — a step up in rank.
+          const score = (d) => {
+            const dy = d.row - n.row;
+            return (d.col - n.col) + 0.3 * Math.abs(dy) - (dy < 0 ? CAREER.RISE_BIAS : 0) +
+              CAREER.HOP_COST * (d.layer - n.layer) - (isHot(d) ? 1.2 : 0) -
+              0.9 * (d.match != null ? d.match : 0.5) + Math.random() * 0.6;
+          };
+          const scored = cands.map((d) => ({ d, s: score(d) })).sort((a, b) => a.s - b.s).map((e) => e.d);
 
           let targets;
-          if (!cands.length) {
-            targets = [{ col: Math.min(edgeCol, n.col + 3), row: n.row, dot: null }];
+          if (!scored.length) {
+            // No job in reach: keep advancing; sometimes climb a row or two.
+            const r = Math.random();
+            const dRow = r < CAREER.RISE_ADVANCE ? -(1 + (Math.random() < 0.4 ? 1 : 0)) : (r > 0.9 ? 1 : 0);
+            const row = Math.max(minRow, Math.min(maxRow, n.row + dRow));
+            targets = [{ col: Math.min(edgeCol, n.col + 3), row, layer: n.layer, dot: null }];
           } else {
-            const first = cands[(Math.random() < 0.7 || cands.length < 2) ? 0 : 1];
+            const first = scored[0];
             targets = [first];
             const pathsNow = queue.length + leaves.length + 1;
-            if (n.dot && cands.length >= 2 && pathsNow < CAREER.MAX_PATHS && Math.random() < CAREER.SPLIT_P) {
+            if (n.dot && scored.length >= 2 && pathsNow < CAREER.MAX_PATHS && Math.random() < CAREER.SPLIT_P) {
+              // Branch: prefer a different domain and the other vertical direction.
               const dir = Math.sign(first.row - n.row);
-              const other = cands.find((d) => d !== first && Math.sign(d.row - n.row) !== dir) ||
-                            cands.find((d) => d !== first);
+              const other =
+                scored.find((d) => d !== first && d.layer !== first.layer && Math.sign(d.row - n.row) !== dir) ||
+                scored.find((d) => d !== first && d.layer !== first.layer) ||
+                scored.find((d) => d !== first && Math.sign(d.row - n.row) !== dir) ||
+                scored.find((d) => d !== first);
               if (other) targets.push(other);
             }
-            targets = targets.map((d) => ({ col: d.col, row: d.row, dot: d }));
+            targets = targets.map((d) => ({ col: d.col, row: d.row, layer: d.layer, dot: d }));
           }
 
           for (const t of targets) {
             if (t.dot) used.add(t.dot);
-            const pts = careerStepPts(n.col, n.row, t.col, t.row);
-            const child = { col: t.col, row: t.row, dot: t.dot, parent: n, children: [], pts };
-            child.len = polyLen(pts);
+            const pts = careerStepPts(n.col, n.row, n.layer * layerZ, t.col, t.row, t.layer * layerZ);
+            const child = { col: t.col, row: t.row, layer: t.layer, dot: t.dot, parent: n, children: [], pts };
+            child.len = polyLen3(pts);
             child.dist = n.dist + child.len;
             n.children.push(child);
             nodes.push(child);
@@ -4209,40 +4695,28 @@
           }
         }
 
-        // The "real" path: one complete root -> right-edge route, never split.
-        // It moves in all three dimensions: right = time (X), up/down = rank
-        // (Y), and at a few jobs along the way it hops back one layer along
-        // Z (a domain shift), ending on the deepest layer.
-        const leaf = leaves[Math.floor(Math.random() * leaves.length)];
+        // The "real" path: one complete root -> right-edge route, never split,
+        // retracing a gray path exactly (in 3D too). Prefer one that reached a
+        // deeper domain, so the reveal shows real movement along Z.
+        const maxLayer = Math.max(...leaves.map((l) => l.layer));
+        const deep = leaves.filter((l) => l.layer >= maxLayer - 1);
+        const leaf = deep[Math.floor(Math.random() * deep.length)];
         const chain = [];
         for (let n = leaf; n; n = n.parent) chain.unshift(n);
-        const D = width * CAREER.DEPTH;
-        const layerZ = D / CAREER.SLICES;
-        const hopAt = new Set();
-        const stops = chain.length - 1;   // nodes after the root
-        const hops = Math.min(CAREER.SLICES, Math.max(1, stops - 1));
-        for (let h = 1; h <= hops; h++) hopAt.add(Math.max(1, Math.round((stops * h) / (hops + 1))));
         const path = [{ x: chain[0].col * GRID, y: chain[0].row * GRID, z: 0 }];
-        let z = 0;
+        const stops = [];   // jobs the white path takes (roles held)
         for (let i = 1; i < chain.length; i++) {
           const n = chain[i];
-          for (let j = 1; j < n.pts.length; j++) path.push({ x: n.pts[j].x, y: n.pts[j].y, z });
-          if (hopAt.has(i) && i < chain.length - 1) {
-            z = Math.min(D, z + layerZ);
-            path.push({ x: n.pts[n.pts.length - 1].x, y: n.pts[n.pts.length - 1].y, z });
-          }
-        }
-        let pathLen = 0;
-        for (let i = 1; i < path.length; i++) {
-          const a = path[i - 1], b = path[i];
-          pathLen += Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+          for (let k2 = 1; k2 < n.pts.length; k2++) path.push(n.pts[k2]);
+          if (n.dot) stops.push({ dist: n.dist, dot: n });
         }
 
         return {
           nodes,
           maxDist: Math.max(...leaves.map((l) => l.dist)),
           path,
-          pathLen
+          pathLen: leaf.dist,
+          stops
         };
       }
 
@@ -4263,8 +4737,15 @@
           }
           if (c.t < 200) return;
           Object.assign(c, careerNewCycle());
+          if (calmMotion) {
+            // Completed graph, held still: full paths, 3D view, roles held.
+            c.phase = 'hold3d'; c.D = c.tree.maxDist; c.Dw = c.tree.pathLen; c.k = 1; c.t = 1e9;
+            const past = performance.now() - 1e5;
+            c.tree.stops.forEach((st) => c.reached.set(st.dot, past));
+          }
           return;
         }
+        if (calmMotion) return;
 
         if (c.phase === 'gray') {
           c.D += CAREER.GRAY_SPEED * dtMs / 1000;
@@ -4292,7 +4773,7 @@
       }
 
       function careerNewCycle() {
-        return { phase: 'gray', t: 0, D: 0, Dw: 0, k: 0, alpha: 1, tree: buildCareerTree() };
+        return { phase: 'gray', t: 0, D: 0, Dw: 0, k: 0, alpha: 1, tree: buildCareerTree(), reached: new Map() };
       }
 
       // Raw 3D view (Grok-style): rotate about the vertical axis, then a
@@ -4350,6 +4831,13 @@
         ctx.stroke();
       }
 
+      function careerRoleLabel(n) {
+        const fy = Math.max(0, Math.min(1, (0.9 - (n.row * GRID) / height) / 0.8));
+        const rank = CAREER.RANKS[Math.round(fy * (CAREER.RANKS.length - 1))];
+        const year = Math.max(1, Math.round(((n.col * GRID) / width) * 8));
+        return `${rank} · Year ${year}`;
+      }
+
       function drawCareer() {
         const c = career;
         const k = c ? c.k : 0;
@@ -4364,16 +4852,60 @@
         const alpha = c ? c.alpha : 1;
         const showWhite = tree && (c.phase === 'white' || c.phase === 'hold3d' || c.phase === 'flatten' || c.phase === 'clear');
         const whitePts = showWhite ? polyPartial3(tree.path, c.Dw) : null;
-        const headZ = whitePts ? whitePts[whitePts.length - 1].z : 0;
+        const headZ = whitePts ? (whitePts[whitePts.length - 1].z || 0) : 0;
         const headLayer = Math.round(headZ / layerZ);
         const fog = (z) => 1 - 0.5 * (z / D) * k;   // farther = dimmer (depth cue)
+        const Pz = (x, y, z) => P(x, y, (z || 0) * k);  // a real 3D point, flattened in 2D
 
         if (k > 0.01) {
-          // Floor grid along the bottom of the box (anchors the volume).
+          const ZC = CAREER.AXIS_Z;
+          // Floor (y = bottom) and ceiling (y = top): a faint fill so they read
+          // as surfaces, then their grids.
+          ctx.fillStyle = `rgba(255, 255, 255, ${0.025 * k})`;
+          for (const yy of [height, 0]) {
+            const q = [P(0, yy, 0), P(width, yy, 0), P(width, yy, D), P(0, yy, D)];
+            ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y);
+            for (let i2 = 1; i2 < 4; i2++) ctx.lineTo(q[i2].x, q[i2].y);
+            ctx.closePath(); ctx.fill();
+          }
           ctx.lineWidth = 1;
-          ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * k})`;
-          for (let x = 0; x <= width + 0.5; x += GRID * 2) careerLine(P(x, height, 0), P(x, height, D));
-          for (let jz = 1; jz <= CAREER.SLICES; jz++) careerLine(P(0, height, jz * layerZ), P(width, height, jz * layerZ));
+          for (const yy of [height, 0]) {
+            // lines running along Z (depth) — pink-tinted like the Z axis
+            for (let x = 0, ix = 0; x <= width + 0.5; x += GRID, ix++) {
+              ctx.strokeStyle = `rgba(${ZC}, ${(ix % 4 === 0 ? 0.3 : 0.14) * k})`;
+              careerLine(P(x, yy, 0), P(x, yy, D));
+            }
+            // lines running along X across the depth
+            for (let z = GRID; z <= D + 0.5; z += GRID) {
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.08 * k})`;
+              careerLine(P(0, yy, z), P(width, yy, z));
+            }
+          }
+          // Side walls (x = 0 and x = right edge): faint fill, depth lines at
+          // every row, verticals across the depth — closes the box.
+          for (const xx of [0, width]) {
+            const q = [P(xx, 0, 0), P(xx, height, 0), P(xx, height, D), P(xx, 0, D)];
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.025 * k})`;
+            ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y);
+            for (let i2 = 1; i2 < 4; i2++) ctx.lineTo(q[i2].x, q[i2].y);
+            ctx.closePath(); ctx.fill();
+            for (let y = 0, iy = 0; y <= height + 0.5; y += GRID, iy++) {
+              ctx.strokeStyle = `rgba(${ZC}, ${(iy % 4 === 0 ? 0.26 : 0.11) * k})`;
+              careerLine(P(xx, y, 0), P(xx, y, D));
+            }
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.06 * k})`;
+            for (let z = GRID; z <= D + 0.5; z += GRID) careerLine(P(xx, 0, z), P(xx, height, z));
+          }
+          // Layer boundaries on floor and ceiling.
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.16 * k})`;
+          for (let jz = 1; jz <= CAREER.SLICES; jz++) {
+            careerLine(P(0, height, jz * layerZ), P(width, height, jz * layerZ));
+            careerLine(P(0, 0, jz * layerZ), P(width, 0, jz * layerZ));
+          }
+          // The box's four depth edges.
+          ctx.lineWidth = 1.3;
+          ctx.strokeStyle = `rgba(${ZC}, ${0.5 * k})`;
+          for (const [ex, ey] of [[0, 0], [width, 0], [0, height], [width, height]]) careerLine(P(ex, ey, 0), P(ex, ey, D));
 
           // Domain layers along Z (back to front), revealed by the rotation.
           for (let jz = CAREER.SLICES; jz >= 1; jz--) {
@@ -4383,17 +4915,22 @@
             const a = (0.12 + 0.28 * reveal + 0.3 * reached) * k * fog(z);
             if (a < 0.02) continue;
             ctx.lineWidth = 1;
-            ctx.strokeStyle = `rgba(255, 255, 255, ${a * 0.25})`;
-            const step = GRID * 4;
-            for (let x = 0; x <= width + 0.5; x += step) careerLine(P(x, 0, z), P(x, height, z));
-            for (let y = 0; y <= height + 0.5; y += step) careerLine(P(0, y, z), P(width, y, z));
+            // every grid line, faint…
+            ctx.strokeStyle = `rgba(255, 255, 255, ${a * 0.1})`;
+            for (let x = 0; x <= width + 0.5; x += GRID) careerLine(P(x, 0, z), P(x, height, z));
+            ctx.strokeStyle = `rgba(255, 255, 255, ${a * 0.15})`;   // rows (X direction) a touch stronger
+            for (let y = 0; y <= height + 0.5; y += GRID) careerLine(P(0, y, z), P(width, y, z));
+            // …with every 4th line a little stronger
+            ctx.strokeStyle = `rgba(255, 255, 255, ${a * 0.26})`;
+            for (let x = 0; x <= width + 0.5; x += GRID * 4) careerLine(P(x, 0, z), P(x, height, z));
+            for (let y = 0; y <= height + 0.5; y += GRID * 4) careerLine(P(0, y, z), P(width, y, z));
             ctx.strokeStyle = `rgba(255, 255, 255, ${a * 0.45})`;
             ctx.lineWidth = 1.2;
             careerStroke([P(0, 0, z), P(width, 0, z), P(width, height, z), P(0, height, z), P(0, 0, z)]);
           }
         }
 
-        // Main (front) grid — the job market plane.
+        // Main (front) grid — the first domain layer.
         ctx.lineWidth = 1;
         const gv = Math.round(16 + 40 * k);
         ctx.strokeStyle = `rgba(${gv}, ${gv}, ${gv}, ${0.85 - 0.4 * k})`;
@@ -4405,16 +4942,18 @@
           careerStroke([P(0, 0), P(width, 0), P(width, height), P(0, height), P(0, 0)]);
         }
 
-        // Demand heat map on the market plane (soft green, follows the 3D view).
+        // Demand heat map (soft green), each spot on its domain layer.
         for (const h of heat) {
           const ha = heatAlpha(h);
           if (ha <= 0.01) continue;
-          const o = P(h.x, h.y, 0), ux = P(h.x + h.r, h.y, 0), uy = P(h.x, h.y + h.r, 0);
+          const hz = h.layer * layerZ;
+          const o = Pz(h.x, h.y, hz), ux = Pz(h.x + h.r, h.y, hz), uy = Pz(h.x, h.y + h.r, hz);
+          const f = fog(hz);
           ctx.save();
           ctx.transform(ux.x - o.x, ux.y - o.y, uy.x - o.x, uy.y - o.y, o.x, o.y);
           const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-          g.addColorStop(0, `rgba(${CAREER.HEAT_RGB}, ${0.26 * ha})`);
-          g.addColorStop(0.5, `rgba(${CAREER.HEAT_RGB}, ${0.1 * ha})`);
+          g.addColorStop(0, `rgba(${CAREER.HEAT_RGB}, ${0.26 * ha * f})`);
+          g.addColorStop(0.5, `rgba(${CAREER.HEAT_RGB}, ${0.1 * ha * f})`);
           g.addColorStop(1, `rgba(${CAREER.HEAT_RGB}, 0)`);
           ctx.fillStyle = g;
           ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
@@ -4437,24 +4976,21 @@
           ctx.textAlign = 'center';
           ctx.fillStyle = `rgba(${CAREER.AXIS_Y}, ${0.85 * k})`; ctx.fillText('Y rank', ay.x, ay.y - 9);
           ctx.textAlign = 'left';
-          ctx.fillStyle = `rgba(${CAREER.AXIS_Z}, ${0.85 * k})`; ctx.fillText('Z domain', az.x + 6, az.y + 9);   // below the axis end; layer names sit above it
+          ctx.fillStyle = `rgba(${CAREER.AXIS_Z}, ${0.85 * k})`; ctx.fillText('Z domain', az.x + 6, az.y + 9);
 
           ctx.font = '500 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-          // X: years
           ctx.textAlign = 'center';
           ctx.fillStyle = `rgba(${CAREER.AXIS_X}, ${0.6 * k})`;
           CAREER.YEARS.forEach((label, ix) => {
             const t = P((width * ix) / (CAREER.YEARS.length - 1), height, 0);
             ctx.fillText(label, t.x, t.y + 11);
           });
-          // Y: rank levels (bottom to top)
           ctx.textAlign = 'left';
           ctx.fillStyle = `rgba(${CAREER.AXIS_Y}, ${0.6 * k})`;
           CAREER.RANKS.forEach((label, iy) => {
             const t = P(0, height * (0.9 - (0.8 * iy) / (CAREER.RANKS.length - 1)), 0);
             ctx.fillText(label, t.x + 5, t.y);
           });
-          // Z: domain layers — the white path's current layer lights up
           CAREER.LAYERS.forEach((label, iz) => {
             if (iz > CAREER.SLICES) return;
             const t = P(0, height, iz * layerZ);
@@ -4463,42 +4999,44 @@
             ctx.fillStyle = on
               ? `rgba(255, 255, 255, ${0.95 * k})`
               : `rgba(${CAREER.AXIS_Z}, ${0.55 * k * fog(iz * layerZ)})`;
-            ctx.fillText(label, t.x + 4, t.y - 9);   // just above the Z axis (clear of the X ticks)
+            ctx.fillText(label, t.x + 4, t.y - 9);
           });
         }
 
         const touched = new Set();
 
-        // Gray career paths (on the front grid).
+        // Gray career paths — each in its own domain (separates in 3D).
         if (tree) {
           ctx.lineWidth = 1.6;
-          ctx.strokeStyle = `rgba(150, 160, 176, ${0.8 * alpha})`;
           const tips = [];
           for (const n of tree.nodes) {
             const p = n.parent;
             if (!p || c.D <= p.dist) continue;
-            const part = c.D >= n.dist ? n.pts : polyPartial(n.pts, c.D - p.dist);
-            careerStroke(part.map((q) => P(q.x, q.y, 0)));
+            const part = c.D >= n.dist ? n.pts : polyPartial3(n.pts, c.D - p.dist);
+            ctx.strokeStyle = `rgba(${CAREER.GRAY_RGB}, ${CAREER.GRAY_ALPHA * alpha * fog(n.layer * layerZ)})`;
+            careerStroke(part.map((q) => Pz(q.x, q.y, q.z)));
             if (c.D >= n.dist) { if (n.dot) touched.add(n.dot); }
-            else tips.push(P(part[part.length - 1].x, part[part.length - 1].y, 0));
+            else { const e = part[part.length - 1]; tips.push(Pz(e.x, e.y, e.z)); }
           }
-          ctx.fillStyle = `rgba(205, 214, 228, ${0.9 * alpha})`;
+          ctx.fillStyle = `rgba(${CAREER.GRAY_RGB}, ${Math.min(1, CAREER.GRAY_ALPHA + 0.25) * alpha})`;
           for (const tp of tips) { ctx.beginPath(); ctx.arc(tp.x, tp.y, 2.2, 0, Math.PI * 2); ctx.fill(); }
         }
 
-        // Job dots.
+        // Job dots — spread into their domain layers in 3D.
         for (const d of dots) {
-          const p = P(d.col * GRID, d.row * GRID, 0);
-          const a = Math.max(0, Math.min(1, d.alpha));
+          const dz = (d.layer || 0) * layerZ;
+          const p = Pz(d.col * GRID, d.row * GRID, dz);
+          const a = Math.max(0, Math.min(1, d.alpha)) * fog(dz);
           const hit = touched.has(d);
-          const r = Math.max(1.2, 2.15 * d.scale) * (hit ? 1.35 : 1);
-          ctx.fillStyle = hit ? `rgba(225, 232, 242, ${0.9 * a})` : `rgba(180, 190, 205, ${0.55 * a})`;
+          const m = d.match != null ? d.match : 0.6;
+          const r = Math.max(1.2, 2.15 * d.scale) * (hit ? 1.35 : 0.72 + 0.6 * m) * (1 - 0.25 * (dz / D) * k);
+          ctx.fillStyle = hit ? `rgba(225, 232, 242, ${0.9 * a})` : `rgba(180, 190, 205, ${(0.28 + 0.5 * m) * a})`;
           ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
         }
 
-        // White "real" path through X/Y/Z — thinner and dimmer with depth.
+        // White "real" path — retraces one gray path through X/Y/Z.
         if (showWhite && whitePts.length > 1) {
-          const proj = whitePts.map((q) => P(q.x, q.y, (q.z || 0) * k));
+          const proj = whitePts.map((q) => Pz(q.x, q.y, q.z));
           for (let pass = 0; pass < 2; pass++) {
             for (let i = 1; i < proj.length; i++) {
               const zMid = ((whitePts[i - 1].z || 0) + (whitePts[i].z || 0)) / 2;
@@ -4508,6 +5046,58 @@
               careerLine(proj[i - 1], proj[i]);
             }
           }
+
+          // Roles held: a ring pulse as the white path reaches each job, then
+          // a small ring that stays. In 3D, a label names the role.
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const labels = [];
+          let prevLayer = -1;
+          for (const st of tree.stops) {
+            if (st.dist > c.Dw + 0.01) break;
+            const n = st.dot;
+            if (!c.reached.has(n)) c.reached.set(n, now);
+            const age = now - c.reached.get(n);
+            const q = Pz(n.col * GRID, n.row * GRID, n.layer * layerZ);
+            if (age < 900) {
+              const u = age / 900;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.75 * (1 - u) * alpha})`;
+              ctx.lineWidth = 1.6;
+              ctx.beginPath(); ctx.arc(q.x, q.y, 3 + 13 * u, 0, Math.PI * 2); ctx.stroke();
+            }
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.85 * alpha * Math.min(1, age / 250)})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(q.x, q.y, 4.6, 0, Math.PI * 2); ctx.stroke();
+
+            const la = Math.max(0, Math.min(1, (k - 0.25) / 0.45)) * alpha * Math.min(1, age / 300);
+            // Domain shown on the first role and whenever it changes (a Z hop).
+            const domain = n.layer !== prevLayer ? CAREER.LAYERS[n.layer] : null;
+            prevLayer = n.layer;
+            if (la > 0.02) labels.push({ text: careerRoleLabel(n), domain, x: q.x, y: q.y - 11, la, age });
+          }
+          // Role labels (3D only): newest first; an older label that would
+          // overlap one already shown is skipped, so they never pile up.
+          ctx.font = '600 9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          const placed = [];
+          labels.sort((a, b) => a.age - b.age);
+          labels.forEach((lb, idx) => {
+            const w = Math.max(ctx.measureText(lb.text).width, lb.domain ? ctx.measureText(lb.domain).width : 0) + 6;
+            const top = lb.domain ? lb.y - 17 : lb.y - 6;
+            const box = { x0: lb.x - w / 2, x1: lb.x + w / 2, y0: top, y1: lb.y + 6 };
+            if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) return;
+            placed.push(box);
+            const a = lb.la * (idx === 0 ? 1 : 0.7);   // the current role reads brightest
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(0, 0, 0, ${0.7 * a})`;
+            ctx.strokeText(lb.text, lb.x, lb.y);
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * a})`;
+            ctx.fillText(lb.text, lb.x, lb.y);
+            if (lb.domain) {
+              ctx.strokeText(lb.domain, lb.x, lb.y - 11);
+              ctx.fillStyle = `rgba(${CAREER.AXIS_Z}, ${0.95 * a})`;
+              ctx.fillText(lb.domain, lb.x, lb.y - 11);
+            }
+          });
 
           const h = proj[proj.length - 1];
           if (c.phase === 'white') {
@@ -4524,7 +5114,7 @@
             // Arrived: the head becomes the Hire beacon (pulsing green).
             const grow = c.phase === 'hold3d' ? Math.min(1, c.t / 450) : 1;
             const B = CAREER.BEACON_RGB;
-            const pulse = (now % 1350) / 1350;
+            const pulse = calmMotion ? 0.35 : (now % 1350) / 1350;
             ctx.strokeStyle = `rgba(${B}, ${0.6 * (1 - pulse) * alpha * grow})`;
             ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.arc(h.x, h.y, 4 + 12 * pulse, 0, Math.PI * 2); ctx.stroke();
@@ -4551,14 +5141,21 @@
         tickMarket();
         tickHireCamera();
         tickCareer(dt * 1000 / 60);
+        if (mode === 'jobs') tickHeat(dt * 1000 / 60);
+        tickInfall(dt * 1000 / 60);
+        tickUnhire(dt * 1000 / 60);
         tickAutoplay(dt * 1000 / 60);
         updateDots();
         ctx.clearRect(0, 0, width, height);
         if (mode === 'career') {
           drawCareer();
+        } else if (mode === 'unhire') {
+          drawUnhire();
         } else {
           if (mode === 'hire') drawGrid();
+          if (mode === 'jobs') drawHeat2D();
           drawDots();
+          if (mode === 'hire') drawInfall();
         }
       }
 
@@ -4592,9 +5189,13 @@
          ========================================================== */
       const autoMQ = window.matchMedia ? window.matchMedia('(hover: none) and (pointer: coarse)') : null;
       const AUTO_JOBS_MS = 8000;        // let the market fill before Career
-      const AUTO_HIRE_HOLD_MS = 3000;   // hold the hired seat before looping
-      const AUTO_HIRE_MAX_MS = 14000;   // safety net
+      const AUTO_HIRE_HOLD_MS = 6500;   // hold the hired seat (well + merging opportunities) before looping
+      const AUTO_HIRE_MAX_MS = 18000;   // safety net
       let autoplay = null;
+      // Desktop: the loop runs only after the visitor clicks the portal
+      // (never on its own), until a link takes over, they click outside the
+      // portal, or they leave CareerOS.
+      let clickLoop = false;
       const workSubtitle = workWorld.querySelector('.subtitle');
       const workSubtitleDefault = workSubtitle ? workSubtitle.textContent : '';
 
@@ -4674,8 +5275,13 @@
           else if (manual === 'jobs') startJobsPreview();
           else startCareerPreview();
         } else if (autoMQ && autoMQ.matches) {
-          startAutoplay();
+          if (calmMotion) startCareerPreview();   // reduced motion: one calm, finished frame
+          else startAutoplay();
+        } else if (clickLoop) {
+          if (calmMotion) startCareerPreview();
+          else startAutoplay();
         } else {
+          stopAutoplay(true);
           stopJobsPreview();
         }
       }
@@ -4696,9 +5302,30 @@
 
       window.__syncJobsPreview = syncJobsPreview;
       window.__stopJobsPreview = () => {
+        clickLoop = false;
         stopAutoplay(true);
         stopJobsPreview();
       };
+
+      // Desktop: a click on the portal (not on a link) starts the loop.
+      const portalEl = document.getElementById('portal');
+      if (portalEl) {
+        portalEl.addEventListener('pointerdown', (e) => {
+          if (autoMQ && autoMQ.matches) return;               // touch screens already autoplay
+          if (!workWorld.classList.contains('active')) return;
+          if (e.target.closest && e.target.closest('a')) return;   // links open as usual
+          clickLoop = true;
+          if (typeof clearLinkSelection === 'function') clearLinkSelection({ syncJobs: false });
+          syncJobsPreview();
+        });
+      }
+      // A click outside the portal ends it.
+      document.addEventListener('pointerdown', (e) => {
+        if (!clickLoop) return;
+        if (portalEl && portalEl.closest('.portal-shell') && portalEl.closest('.portal-shell').contains(e.target)) return;
+        clickLoop = false;
+        syncJobsPreview();
+      });
 
       // Opened straight onto CareerOS (e.g. #career): start autoplay on touch.
       if (workWorld.classList.contains('active')) syncJobsPreview();
