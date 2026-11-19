@@ -448,8 +448,8 @@
     }
 
     body:has(.portal-shell.chroma) .scene-ground-chroma-wash { opacity: 0.88; }
-    body:has(.portal-shell.chroma) .scene-ground-chroma-reflect { opacity: 0.78; }
-    body:has(.portal-shell.chroma) .scene-ground-chroma-line { opacity: 0.65; }
+    body:has(.portal-shell.chroma) .scene-ground-chroma-reflect { opacity: calc(0.78 * var(--mp-single, 1)); }
+    body:has(.portal-shell.chroma) .scene-ground-chroma-line { opacity: calc(0.65 * var(--mp-single, 1)); }
 
     @media (prefers-reduced-motion: reduce) {
       .scene-ground-chroma-wash,
@@ -557,7 +557,7 @@
         transparent 72%
       );
       filter: blur(28px);
-      opacity: var(--ground-reflect-opacity);
+      opacity: calc(var(--ground-reflect-opacity) * var(--mp-single, 1));
       transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
     }
 
@@ -574,7 +574,7 @@
         transparent 75%
       );
       filter: blur(16px);
-      opacity: var(--ground-line-opacity);
+      opacity: calc(var(--ground-line-opacity) * var(--mp-single, 1));
       transition: background 0.55s ease, opacity 0.55s ease, filter 0.55s ease;
     }
 
@@ -1360,6 +1360,84 @@
       display: block;
     }
 
+    /* ===== Multi-portal view (globe button) ===== */
+    body { overflow-x: clip; }   /* side portals never cause sideways scroll mid-zoom */
+
+    .mp-track {
+      position: absolute;
+      z-index: 5;
+      display: none;
+      pointer-events: none;
+      will-change: transform;   /* scale the rendered layer; no re-render per zoom step */
+    }
+    /* the real portal (bloom + border) is the selected one and rides the camera */
+    .portal-shell.mp-live { will-change: transform; z-index: 6; }
+    .mp-frame.is-shell { visibility: hidden; }
+
+    /* one ground shadow per portal window, in that world's colour */
+    .mp-ground { position: absolute; inset: 0; pointer-events: none; }
+    .mp-shadow, .mp-shadow-line {
+      position: absolute;
+      transform: translateX(-50%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .mp-shadow {
+      bottom: 18%;
+      height: 70%;
+      background: radial-gradient(ellipse 42% 55% at 50% 100%,
+        rgba(var(--mp-hot), 0.5) 0%, rgba(var(--mp-soft), 0.2) 40%, transparent 72%);
+      filter: blur(24px);
+    }
+    .mp-shadow-line {
+      bottom: 22%;
+      height: 44px;
+      background: radial-gradient(ellipse 55% 80% at 50% 50%,
+        rgba(var(--mp-core), 0.34) 0%, rgba(var(--mp-hot), 0.16) 40%, transparent 75%);
+      filter: blur(14px);
+    }
+    .mp-shadow[data-portal="life"], .mp-shadow-line[data-portal="life"]         { --mp-hot: 125, 211, 252; --mp-soft: 56, 189, 248;  --mp-core: 224, 242, 254; }
+    .mp-shadow[data-portal="build"], .mp-shadow-line[data-portal="build"]       { --mp-hot: 74, 222, 128;  --mp-soft: 34, 197, 94;   --mp-core: 187, 247, 208; }
+    .mp-shadow[data-portal="work"], .mp-shadow-line[data-portal="work"]         { --mp-hot: 196, 181, 253; --mp-soft: 148, 163, 184; --mp-core: 241, 245, 249; }
+    .mp-shadow[data-portal="commerce"], .mp-shadow-line[data-portal="commerce"] { --mp-hot: 251, 146, 60;  --mp-soft: 249, 115, 22;  --mp-core: 255, 237, 213; }
+    .mp-track.is-on { display: block; }
+
+    .mp-frame {
+      --mp-glow: 226, 232, 240;
+      position: absolute;
+      top: 0;
+      box-sizing: border-box;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 0 14px rgba(var(--mp-glow), 0.2);
+      pointer-events: auto;
+      cursor: pointer;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .mp-frame[data-portal="life"]     { --mp-glow: 56, 189, 248; }
+    .mp-frame[data-portal="build"]    { --mp-glow: 34, 197, 94; }
+    .mp-frame[data-portal="commerce"] { --mp-glow: 249, 115, 22; }
+    .mp-frame.is-selected {
+      border-color: rgba(255, 255, 255, 0.6);
+      box-shadow: 0 0 6px rgba(var(--mp-glow), 0.65), 0 0 28px rgba(var(--mp-glow), 0.45);
+    }
+    /* every world stays live in its own window */
+    .mp-frame > .world { opacity: 1; pointer-events: auto; transition: none; }
+    .mp-frame .world.life .life-ground { opacity: 1; }
+    .mp-frame .world.life .blade { animation: bladeSway 3.6s ease-in-out infinite; }
+    .mp-frame .world.work::before { animation: dotPulse 6s ease-in-out infinite; opacity: 0.75; }
+
+    /* the single portal's glow fades while the multi view is up */
+    .portal-shell > div:not(.portal) { transition: opacity 0.35s ease; }
+    .portal-shell.mp-hidden > div:not(.portal) { opacity: 0 !important; }
+    .portal-shell.mp-hidden > .portal { visibility: hidden; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .mp-frame .world.life .blade,
+      .mp-frame .world.work::before { animation: none; }
+    }
+
     .links {
       display: flex;
       flex-direction: column;
@@ -1372,8 +1450,9 @@
 
     .links a {
       display: block;
-      width: 40%;
-      max-width: 40%;
+      width: auto;
+      min-width: 40%;        /* every button at least this wide… */
+      max-width: 90%;        /* …and a longer label can widen its own button */
       box-sizing: border-box;
       text-decoration: none;
       text-align: center;
@@ -1381,6 +1460,7 @@
       font-size: 1.05rem;
       font-weight: 500;
       padding: 14px 16px;
+      white-space: nowrap;   /* labels stay on one line */
       border-radius: 14px;
       background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.14);
@@ -1936,11 +2016,35 @@
       }
     }
 
+    /* Globe: on hover the meridians turn about the axis like a real globe
+       (latitude lines stay put). A meridian at angle θ is the full circle
+       squashed to |cos θ|, so each one eases 1 → 0 → 1 per half turn;
+       two meridians 90° apart make the spin continuous. */
+    #worlds-toggle .globe-meridian {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: globeMeridian 5s infinite;     /* 10s per full turn */
+      animation-play-state: paused;             /* rests mid-turn; resumes where it left off */
+    }
+    #worlds-toggle .globe-meridian:nth-of-type(1) { animation-delay: -1.8s; }   /* θ ≈ 65° → the classic narrow meridian at rest */
+    #worlds-toggle .globe-meridian:nth-of-type(2) { animation-delay: -4.3s; }   /* θ ≈ 155° */
+    @keyframes globeMeridian {
+      0%   { transform: scaleX(1); animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0); }
+      50%  { transform: scaleX(0.001); animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1); }
+      100% { transform: scaleX(1); }
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      #worlds-toggle:hover { transform: none; }   /* no tilt: it spins instead */
+      #worlds-toggle:hover .globe-meridian { animation-play-state: running; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .guide-hint::before,
       .toggle-btn::before {
         animation: none;
       }
+      #worlds-toggle .globe-meridian { animation-play-state: paused !important; }
     }
 
     .guide-gesture {
@@ -2254,6 +2358,14 @@
                 <rect x="16.7" y="15.2" width="2.6" height="11.4" rx="1.3" fill="currentColor" fill-opacity="0.82"/>
               </svg>
             </button>
+            <button class="toggle-btn" id="worlds-toggle" type="button" aria-label="Show all portals" aria-pressed="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="8.6"/>
+                <ellipse class="globe-meridian" cx="12" cy="12" rx="8.6" ry="8.6"/>
+                <ellipse class="globe-meridian" cx="12" cy="12" rx="8.6" ry="8.6"/>
+                <path d="M3.7 9.1h16.6M3.7 14.9h16.6"/>
+              </svg>
+            </button>
             <button class="toggle-btn" id="theme-toggle" type="button" aria-label="Dark mode">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 14.35A9 9 0 1 1 9.65 3 7.15 7.15 0 0 0 21 14.35z"/></svg>
             </button>
@@ -2411,6 +2523,7 @@
           <a href="https://os.briancrink.com/life" data-subtitle="Happening Today">Status</a>
           <a href="https://feed.briancrink.com" data-subtitle="Newsfeeds">Feed</a>
           <a href="https://social.briancrink.com" data-subtitle="Social Profiles">Social</a>
+          <a href="https://social.briancrink.com/profile" data-subtitle="All Profiles in One Place">Profiles</a>
           <a href="https://space.briancrink.com" data-subtitle="Personal Spaces">Spaces</a>
         </div>
       </section>
@@ -2437,8 +2550,8 @@
         <div class="links">
           <a href="https://dev.briancrink.com" data-subtitle="Development Workspace">Dev</a>
           <a href="https://tech.briancrink.com" data-subtitle="Technology Stack">Tech</a>
-          <a href="https://api.briancrink.com" data-subtitle="APIs and Services">API</a>
-          <a href="https://app.briancrink.com" data-subtitle="Primary Application">App</a>
+          <a href="https://demo.briancrink.com" data-subtitle="Live Demos">Demo</a>
+          <a href="https://lab.briancrink.com" data-subtitle="Experiments and Prototypes">Lab</a>
           <a href="https://apps.briancrink.com" data-subtitle="Application Suite">Apps</a>
           <a href="https://os.briancrink.com" data-subtitle="Operating System Layer">OS</a>
         </div>
@@ -2476,6 +2589,7 @@
           <a href="https://business.briancrink.com" data-subtitle="Business Development">Status</a>
           <a href="https://shop.briancrink.com" data-subtitle="Shop Products">Shop</a>
           <a href="https://store.briancrink.com" data-subtitle="Storefront">Store</a>
+          <a href="https://studio.briancrink.com" data-subtitle="Creative Studio">Studio</a>
           <a href="https://contact.briancrink.com" data-subtitle="Get In Touch">Contact</a>
           <a href="https://support.briancrink.com" data-subtitle="Customer Support">Support</a>
         </div>
@@ -2554,6 +2668,8 @@
       document.querySelectorAll('.build-icon img[data-src]').forEach((img) => {
         img.src = img.dataset.src;
         img.removeAttribute('data-src');
+        // decode now, off the main thread, so first showing them never stalls a frame
+        if (img.decode) img.decode().catch(() => {});
       });
     }
 
@@ -3367,7 +3483,7 @@
     }
 
     function setPortal(nextIndex, direction = 1) {
-      if (transitioning) return;
+      if (transitioning || window.__mpActive) return;   // multi-portal view handles selection itself
       nextIndex = (nextIndex + PORTALS.length) % PORTALS.length;
       if (nextIndex === index) return;
 
@@ -3561,9 +3677,9 @@
       let chosen = null;
 
       function resize() {
-        const rect = workWorld.getBoundingClientRect();
-        width = Math.max(1, rect.width);
-        height = Math.max(1, rect.height);
+        // layout size, not the on-screen rect (the multi-portal view scales worlds)
+        width = Math.max(1, workWorld.clientWidth);
+        height = Math.max(1, workWorld.clientHeight);
         canvas.width = width * devicePixelRatio;
         canvas.height = height * devicePixelRatio;
         canvas.style.width = width + 'px';
@@ -5136,8 +5252,7 @@
         dt = lastLoopTime ? Math.min(3, Math.max(0, (now - lastLoopTime) / (1000 / 60))) : 1;
         lastLoopTime = now;
         if (!active) return;
-        const rect = workWorld.getBoundingClientRect();
-        if (Math.abs(rect.width - width) > 1 || Math.abs(rect.height - height) > 1) resize();
+        if (Math.abs(workWorld.clientWidth - width) > 1 || Math.abs(workWorld.clientHeight - height) > 1) resize();
         tickMarket();
         tickHireCamera();
         tickCareer(dt * 1000 / 60);
@@ -5188,9 +5303,9 @@
          follows it. Choosing a link takes over; desktop is unchanged.
          ========================================================== */
       const autoMQ = window.matchMedia ? window.matchMedia('(hover: none) and (pointer: coarse)') : null;
-      const AUTO_JOBS_MS = 8000;        // let the market fill before Career
-      const AUTO_HIRE_HOLD_MS = 6500;   // hold the hired seat (well + merging opportunities) before looping
-      const AUTO_HIRE_MAX_MS = 18000;   // safety net
+      const AUTO_JOBS_MS = 14000;       // let the market fill (and turn over) before Career
+      const AUTO_HIRE_HOLD_MS = 11000;  // hold the hired seat (well + merging opportunities) before looping
+      const AUTO_HIRE_MAX_MS = 24000;   // safety net
       let autoplay = null;
       // Desktop: the loop runs only after the visitor clicks the portal
       // (never on its own), until a link takes over, they click outside the
@@ -5288,6 +5403,8 @@
 
       workWorld.querySelectorAll('.links a').forEach((a) => {
         a.addEventListener('mouseenter', () => {
+          // only the selected portal plays (multi view: other windows stay calm)
+          if (!workWorld.classList.contains('active')) return;
           stopAutoplay(false);
           const label = (a.textContent || '').trim();
           if (/^hire$/i.test(label) || /hire\.briancrink/i.test(a.href || '')) startHirePreview();
@@ -5365,9 +5482,8 @@
         const parent = canvas.parentElement;
         if (!parent) return;
 
-        const rect = parent.getBoundingClientRect();
-        width = Math.max(1, rect.width);
-        height = Math.max(1, rect.height);
+        width = Math.max(1, parent.clientWidth);   // layout size (unaffected by the multi-portal scale)
+        height = Math.max(1, parent.clientHeight);
 
         canvas.width = width * devicePixelRatio;
         canvas.height = height * devicePixelRatio;
@@ -5454,7 +5570,8 @@
 
         // Skip rendering while BusinessOS is hidden (still visible while
         // fading out); keep the rotation clock moving so it resumes in step.
-        if (commerceWorld && !commerceWorld.classList.contains('active') &&
+        if (commerceWorld && !document.body.classList.contains('mp-on') &&
+            !commerceWorld.classList.contains('active') &&
             !commerceWorld.classList.contains('exit-left') &&
             !commerceWorld.classList.contains('exit-right')) {
           rotation += 0.0018;
@@ -5465,7 +5582,9 @@
         ctx.clearRect(0, 0, width, height);
         rotation += 0.0018;
 
-        const isChroma = portalShell.classList.contains('chroma');
+        // zoom only when BusinessOS itself is the lit, selected portal
+        const isChroma = portalShell.classList.contains('chroma') &&
+          !!commerceWorld && commerceWorld.classList.contains('active');
         const targetScale = isChroma ? SCALE_ZOOMED : SCALE_NORMAL;
         // Smooth ease toward target
         currentScale += (targetScale - currentScale) * 0.045;
@@ -5607,11 +5726,14 @@
         const mapW = map.getBoundingClientRect().width || 45;
         const infoW = info.getBoundingClientRect().width || 32;
         const themeW = theme.getBoundingClientRect().width || 32;
+        const worldsBtn = document.getElementById('worlds-toggle');
+        const worldsW = worldsBtn ? (worldsBtn.getBoundingClientRect().width || 32) : 0;
+        const btnCount = worldsBtn ? 3 : 2;
         const nameCenter = (nameBox.left + nameBox.right) / 2;
         portal.style.left = Math.max(0, nameBox.left - subBox.left) + 'px';
         map.style.left = (nameCenter - mapW / 2 - subBox.left) + 'px';
         const mapRight = nameCenter + mapW / 2;
-        const gap = Math.max(8, (nameBox.right - mapRight - infoW - themeW) / 2);
+        const gap = Math.max(8, (nameBox.right - mapRight - infoW - worldsW - themeW) / btnCount);
         chrome.style.left = (mapRight + gap - subBox.left) + 'px';
         chrome.style.right = 'auto';
         chrome.style.display = 'flex';
@@ -5672,6 +5794,321 @@
         btn.addEventListener('pointerup', release);
         btn.addEventListener('pointercancel', release);
         btn.addEventListener('pointerleave', release);
+      });
+    })();
+
+    /* ============================================================
+       Multi-portal view — the globe button zooms out to all four
+       portals and back in to the selected one.
+       The real portal (border + bloom) always IS the selected portal: it
+       rides the camera during the zoom and moves to whichever portal is
+       selected; the other worlds sit fixed in plain windows beside it.
+       Desktop: a row of four. Mobile: a looping carousel (swipe).
+       Left/right select; up/down still walk the selected portal's links;
+       Enter (no link chosen) / Esc / the globe zoom back in.
+       ============================================================ */
+    (function initMultiPortal() {
+      const btn = document.getElementById('worlds-toggle');
+      const shell = document.getElementById('portalShell');
+      const portalBox = document.getElementById('portal');
+      const ground = document.getElementById('sceneGround');
+      if (!btn || !shell || !portalBox || !stage) return;
+
+      const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const mobileMQ = window.matchMedia('(max-width: 768px)');
+      const ZOOM_MS = calm ? 0 : 850;
+      const SLIDE_MS = calm ? 0 : 420;
+      const MOBILE_SCALE = 0.62;
+
+      const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+      const n = worlds.length;
+      let state = 'single';          // single | anim | multi
+      let W = 0, H = 0, GAP = 40, baseL = 0, baseT = 0;
+      let f = 0, sc = 1, mix = 0, raf = 0;   // camera focus (slots), scale, 0 = single … 1 = multi
+
+      const track = document.createElement('div');
+      track.className = 'mp-track';
+      track.setAttribute('aria-hidden', 'true');
+      stage.appendChild(track);
+
+      let groundBox = null;
+      if (ground) {
+        groundBox = document.createElement('div');
+        groundBox.className = 'mp-ground';
+        ground.appendChild(groundBox);
+      }
+
+      const frames = worlds.map((world, i) => {
+        const el = document.createElement('div');
+        el.className = 'mp-frame';
+        el.dataset.portal = world.dataset.portal;
+        track.appendChild(el);
+        const fr = { i, el, world, xpos: i, placeholder: null, shadow: null, line: null };
+        if (groundBox) {
+          fr.shadow = document.createElement('div');
+          fr.shadow.className = 'mp-shadow';
+          fr.shadow.dataset.portal = world.dataset.portal;
+          fr.line = document.createElement('div');
+          fr.line.className = 'mp-shadow-line';
+          fr.line.dataset.portal = world.dataset.portal;
+          groundBox.appendChild(fr.shadow);
+          groundBox.appendChild(fr.line);
+        }
+        el.addEventListener('click', (e) => {
+          if (state !== 'multi') return;
+          if (e.target.closest && e.target.closest('a')) return;   // links open as usual
+          selectTo(i);
+        });
+        return fr;
+      });
+      // clicks on the real portal while it stands in the row: zoom in
+      portalBox.addEventListener('click', (e) => {
+        if (state !== 'multi') return;
+        if (e.target.closest && e.target.closest('a')) return;
+        zoomIn();
+      });
+
+      const isMobile = () => mobileMQ.matches;
+
+      function layout() {
+        const keep = shell.style.transform;
+        shell.style.transform = '';
+        const pr = portalBox.getBoundingClientRect();
+        const sr = stage.getBoundingClientRect();
+        shell.style.transform = keep;
+        W = pr.width; H = pr.height;
+        GAP = isMobile() ? 22 : 44;
+        baseL = pr.left; baseT = pr.top;
+        track.style.left = (pr.left - sr.left) + 'px';
+        track.style.top = (pr.top - sr.top) + 'px';
+        track.style.width = W + 'px';
+        track.style.height = H + 'px';
+        track.style.transformOrigin = (W / 2) + 'px ' + (H / 2) + 'px';
+        frames.forEach((fr) => { fr.el.style.width = W + 'px'; fr.el.style.height = H + 'px'; });
+      }
+
+      // Desktop: fixed row order. Mobile: each frame takes the copy of its
+      // slot nearest `center`, so the carousel loops seamlessly.
+      function placeFrames(center) {
+        frames.forEach((fr) => {
+          let x = fr.i;
+          if (isMobile()) {
+            while (x < center - 2) x += n;
+            while (x >= center + 2) x -= n;
+          }
+          fr.xpos = x;
+          fr.el.style.left = (x * (W + GAP)) + 'px';
+        });
+      }
+
+      function apply(others) {
+        track.style.transform = 'scale(' + sc + ') translateX(' + (-f * (W + GAP)) + 'px)';
+        // the real portal sits exactly on the selected world's slot
+        const dx = (frames[index].xpos - f) * (W + GAP) * sc;
+        shell.style.transform = (state === 'single' && sc === 1 && dx === 0)
+          ? '' : 'translateX(' + dx + 'px) scale(' + sc + ')';
+        const o = others == null ? 1 : others;
+        frames.forEach((fr) => {
+          fr.el.classList.toggle('is-shell', fr.i === index);
+          fr.el.style.opacity = fr.i === index ? '0' : String(o);
+          if (fr.shadow) {
+            const cx = baseL + W / 2 + (fr.xpos - f) * (W + GAP) * sc;
+            const w = W * sc * 1.5;
+            const a = (fr.i === index ? 1 : o) * mix;
+            fr.shadow.style.left = cx + 'px'; fr.shadow.style.width = w + 'px'; fr.shadow.style.opacity = String(a);
+            fr.line.style.left = cx + 'px'; fr.line.style.width = (w * 0.9) + 'px'; fr.line.style.opacity = String(a);
+          }
+        });
+        if (ground) ground.style.setProperty('--mp-single', String(1 - mix));
+      }
+
+      function animate(f1, s1, m1, ms, kind, done) {
+        cancelAnimationFrame(raf);
+        const f0 = f, s0 = sc, m0 = mix, t0 = performance.now();
+        const step = (now) => {
+          const u = ms ? Math.min(1, (now - t0) / ms) : 1;
+          const e = ease(u);
+          f = f0 + (f1 - f0) * e;
+          sc = s0 + (s1 - s0) * e;
+          mix = m0 + (m1 - m0) * e;
+          let others = 1;
+          if (kind === 'out') others = Math.min(1, e * 1.8);
+          else if (kind === 'in') others = Math.max(0, 1 - Math.max(0, e - 0.4) / 0.6);
+          apply(others);
+          if (u < 1) raf = requestAnimationFrame(step);
+          else if (done) done();
+        };
+        raf = requestAnimationFrame(step);
+      }
+
+      function multiScale() {
+        if (isMobile()) return MOBILE_SCALE;
+        const rowW = n * W + (n - 1) * GAP;
+        return Math.min(1, (window.innerWidth - 64) / rowW);
+      }
+      function multiFocus() {
+        return isMobile() ? frames[index].xpos : (n - 1) / 2;
+      }
+
+      // Put world i in the real portal and the previous one in its window.
+      function swapInto(i) {
+        if (i === index) return;
+        const prev = frames[index], next = frames[i];
+        clearLinkSelection({ syncJobs: false });   // reset the old portal's link + subtitle first
+        prev.el.appendChild(prev.world);                                  // old selection -> its window
+        next.placeholder.parentNode.insertBefore(next.world, next.placeholder);   // new selection -> the portal
+        worlds[index].classList.remove('active');
+        index = i;
+        worlds[index].classList.add('active');
+        if (typeof window.__syncJobsPreview === 'function') window.__syncJobsPreview();
+        dots.forEach((d, k) => d.classList.toggle('active', k === index));
+        setAmbient(PORTALS[index]);
+        syncPortalHash(PORTALS[index]);
+      }
+
+      function selectTo(i) {
+        if (state !== 'multi' || i === index) return;
+        let dir = ((i - index) % n + n) % n;     // 1..n-1
+        if (dir > n / 2) dir -= n;               // shortest way round
+        if (isMobile()) {
+          placeFrames(f + dir / 2);
+          swapInto(i);
+          apply(1);
+          const target = f + dir;
+          state = 'anim';
+          animate(target, sc, 1, SLIDE_MS, null, () => {
+            f = Math.round(f);
+            placeFrames(f);
+            state = 'multi';
+            apply(1);
+          });
+        } else {
+          swapInto(i);
+          apply(1);
+        }
+      }
+
+      function zoomOut() {
+        if (state !== 'single' || transitioning || document.getElementById('portalIntro')) return;
+        clearLinkSelection({ syncJobs: false });
+        setChroma(false);
+        window.__mpActive = true;
+        if (typeof window.__stopJobsPreview === 'function') window.__stopJobsPreview();
+
+        layout();
+        f = index; sc = 1; mix = 0;
+        placeFrames(f);
+        frames.forEach((fr) => {
+          if (!fr.placeholder) {
+            fr.placeholder = document.createComment('portal-world');
+            fr.world.parentNode.insertBefore(fr.placeholder, fr.world);
+          }
+          if (fr.i !== index) fr.el.appendChild(fr.world);   // the selected world stays in the real portal
+        });
+        track.classList.add('is-on');
+        shell.classList.add('mp-live');
+        document.body.classList.add('mp-on');
+        state = 'anim';
+        apply(0);
+
+        // every world shows its scene in its own window
+        if (PORTALS[index] !== 'life') { setSun(SUN_REST_T, 1); growGrass(); }
+        if (PORTALS[index] !== 'build') { loadBuildIcons(); animateIconsIn(); }
+
+        btn.setAttribute('aria-pressed', 'true');
+        btn.setAttribute('aria-label', 'Back to one portal');
+        animate(multiFocus(), multiScale(), 1, ZOOM_MS, 'out', () => {
+          state = 'multi';
+          apply(1);
+        });
+      }
+
+      function zoomIn() {
+        if (state !== 'multi') return;
+        state = 'anim';
+        clearLinkSelection({ syncJobs: false });
+        animate(frames[index].xpos, 1, 0, ZOOM_MS, 'in', () => {
+          frames.forEach((fr) => {
+            if (fr.i !== index) fr.placeholder.parentNode.insertBefore(fr.world, fr.placeholder);
+          });
+          track.classList.remove('is-on');
+          shell.classList.remove('mp-live');
+          shell.style.transform = '';
+          document.body.classList.remove('mp-on');
+          if (ground) ground.style.removeProperty('--mp-single');
+          window.__mpActive = false;
+          state = 'single';
+          btn.setAttribute('aria-pressed', 'false');
+          btn.setAttribute('aria-label', 'Show all portals');
+          // reset the hidden worlds a moment later, off the zoom's last frame
+          const name = PORTALS[index];
+          setTimeout(() => {
+            if (state !== 'single') return;
+            if (name !== 'life') { setSun(0, 0); retractGrass(); }
+            if (name !== 'build') prepareIconsOffCard();
+            if (name === 'commerce' && typeof economyResize === 'function') economyResize();
+            if (typeof window.__syncJobsPreview === 'function') window.__syncJobsPreview();
+          }, 140);
+        });
+      }
+
+      btn.addEventListener('click', () => {
+        if (state === 'single') zoomOut();
+        else if (state === 'multi') zoomIn();
+      });
+
+      // Keys in the multi view: left/right select; Enter (no link chosen) / Esc zoom in.
+      document.addEventListener('keydown', (e) => {
+        if (state === 'single') return;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (state === 'multi') selectTo((index + (e.key === 'ArrowRight' ? 1 : -1) + n) % n);
+          return;
+        }
+        if (state !== 'multi') { if (e.key.startsWith('Arrow')) { e.preventDefault(); e.stopImmediatePropagation(); } return; }
+        if (e.key === 'Escape' || (e.key === 'Enter' && linkIndex < 0)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          zoomIn();
+        }
+      }, true);
+
+      // Nav dots select in the multi view.
+      const dotsEl = document.getElementById('dots');
+      if (dotsEl) {
+        dotsEl.addEventListener('click', (e) => {
+          if (state === 'single') return;
+          const dot = e.target.closest('.nav-dot');
+          if (!dot) return;
+          e.stopPropagation();
+          if (state === 'multi') selectTo(Number(dot.dataset.index));
+        }, true);
+      }
+
+      // Swipe in the multi view (mobile carousel loops).
+      let sx = 0, sdx = 0, swiping = false;
+      stage.addEventListener('touchstart', (e) => {
+        if (state !== 'multi') return;
+        swiping = true; sx = e.touches[0].clientX; sdx = 0;
+      }, { passive: true });
+      stage.addEventListener('touchmove', (e) => {
+        if (swiping) sdx = e.touches[0].clientX - sx;
+      }, { passive: true });
+      stage.addEventListener('touchend', () => {
+        if (!swiping) return;
+        swiping = false;
+        if (state === 'multi' && Math.abs(sdx) > 50) selectTo((index + (sdx < 0 ? 1 : -1) + n) % n);
+      });
+
+      window.addEventListener('resize', () => {
+        if (state !== 'multi') return;
+        layout();
+        if (isMobile()) { f = Math.round(f); placeFrames(f); }
+        else placeFrames(0);
+        f = multiFocus();
+        sc = multiScale();
+        apply(1);
       });
     })();
   </script>
